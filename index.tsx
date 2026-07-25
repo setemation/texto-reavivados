@@ -21,6 +21,15 @@ const parseBold = (text = '') => {
     );
 };
 
+const formatGeminiError = (e: any, defaultMessage: string): string => {
+    console.error(e);
+    const msg = e?.message || '';
+    if (msg.includes('spending cap') || msg.includes('RESOURCE_EXHAUSTED') || e?.status === 429 || msg.includes('429')) {
+        return 'Limite de cota excedido no Google AI Studio (Erro 429). Acesse https://ai.studio/spend para ajustar seu limite de gastos ou insira uma nova API Key.';
+    }
+    return defaultMessage;
+};
+
 // --- API Wrapper ---
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
@@ -428,8 +437,7 @@ const CapituloView = () => {
             }));
             setResult(jsonResult);
         } catch (e) {
-            console.error(e);
-            setError('Falha ao analisar o capítulo.');
+            setError(formatGeminiError(e, 'Falha ao analisar o capítulo.'));
         } finally {
             setLoading(false);
         }
@@ -553,8 +561,7 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
             const analysisResult = JSON.parse(response.text);
             setDeepAnalysisState(prev => ({ ...prev, [index]: { loading: false, result: analysisResult } }));
         } catch (e) {
-            console.error(e);
-            setDeepAnalysisState(prev => ({ ...prev, [index]: { loading: false, error: 'Falha ao realizar análise profunda.' } }));
+            setDeepAnalysisState(prev => ({ ...prev, [index]: { loading: false, error: formatGeminiError(e, 'Falha ao realizar análise profunda.') } }));
         }
     };
 
@@ -614,8 +621,7 @@ Responda em JSON com as chaves: apresentacaoCapitulo (string), analiseHistoricoC
             });
             setResult(JSON.parse(response.text));
         } catch (e) {
-            console.error(e);
-            setError('Falha ao analisar o versículo.');
+            setError(formatGeminiError(e, 'Falha ao analisar o versículo.'));
         } finally {
             setLoading(false);
         }
@@ -759,7 +765,7 @@ const PensamentosView = () => {
             const response = await ai.models.generateContent({ model: "gemini-flash-latest", contents: prompt });
             updateSubAction(id, resultKey, response.text);
         } catch (e) {
-            updateSubAction(id, resultKey, 'Erro ao processar a solicitação.');
+            updateSubAction(id, resultKey, formatGeminiError(e, 'Erro ao processar a solicitação.'));
         } finally {
             updateSubAction(id, 'loading', false);
         }
@@ -790,7 +796,7 @@ const PensamentosView = () => {
             const newQuotes = JSON.parse(response.text).map(q => ({ ...q, id: Math.random().toString(36) }));
             setQuotes(prev => more ? [...prev, ...newQuotes] : newQuotes);
         } catch (e) {
-            setError('Falha ao buscar pensamentos.');
+            setError(formatGeminiError(e, 'Falha ao buscar pensamentos.'));
         } finally {
             setLoading(false);
         }
@@ -870,7 +876,7 @@ const IlustracoesView = () => {
             const newItems = JSON.parse(response.text).map(item => ({ ...item, id: Math.random().toString(36), category }));
             setIllustrations(prev => [...prev, ...newItems]);
         } catch (e) {
-            setError('Falha ao buscar ilustrações.');
+            setError(formatGeminiError(e, 'Falha ao buscar ilustrações.'));
         } finally {
             setLoading(false);
         }
@@ -882,7 +888,7 @@ const IlustracoesView = () => {
             const response = await ai.models.generateContent({ model: "gemini-flash-latest", contents: `Verifique a confiabilidade da notícia/fonte: ${item.fonte} sobre o resumo: "${item.resumo}"` });
             setCheckState(prev => ({ ...prev, [id]: { loading: false, result: response.text } }));
         } catch (e) {
-            setCheckState(prev => ({ ...prev, [id]: { loading: false, result: 'Erro na verificação.' } }));
+            setCheckState(prev => ({ ...prev, [id]: { loading: false, result: formatGeminiError(e, 'Erro na verificação.') } }));
         }
     };
 
@@ -1032,7 +1038,7 @@ INFORMAÇÕES INSERIDAS:
             });
             setResult(response.text);
         } catch (e) {
-            setError('Falha ao construir o texto.');
+            setError(formatGeminiError(e, 'Falha ao construir o texto.'));
         } finally {
             setLoading(false);
         }
