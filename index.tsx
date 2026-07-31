@@ -1452,6 +1452,7 @@ const ImportarView = () => {
     const [scanLoading, setScanLoading] = useState(false);
     const [scanError, setScanError] = useState('');
     const [scanAuthor, setScanAuthor] = useState('');
+    const [scanProgress, setScanProgress] = useState({ current: 0, total: 0 });
     const [parsedCommentaries, setParsedCommentaries] = useState<any[]>([]);
     const [saving, setSaving] = useState(false);
     const [saveError, setSaveError] = useState('');
@@ -1544,42 +1545,71 @@ const ImportarView = () => {
         if (!scanAuthor.trim()) { setScanError('Defina o autor antes de escanear.'); return; }
 
         setScanLoading(true); setScanError(''); setParsedCommentaries([]);
+        setScanProgress({ current: 0, total: 0 });
         try {
             const pdfjsLib = await loadPdfJs();
             const arrayBuffer = await file.arrayBuffer();
             const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+            // 1. Extract ALL pages
             let fullText = '';
-            const maxPages = Math.min(pdf.numPages, 20); // limit to 20 pages for Ollama context
-            for (let p = 1; p <= maxPages; p++) {
+            for (let p = 1; p <= pdf.numPages; p++) {
                 const page = await pdf.getPage(p);
                 const content = await page.getTextContent();
                 fullText += content.items.map((i: any) => i.str).join(' ') + '\n';
             }
-            if (pdf.numPages > 20) {
-                setScanError(`Aviso: O PDF tem ${pdf.numPages} páginas. Apenas as primeiras 20 foram processadas para manter a performance do Ollama.`);
+
+            // 2. Split into ~4000-word chunks (safe for Ollama context)
+            const CHUNK_WORDS = 4000;
+            const words = fullText.split(/\s+/);
+            const chunks: string[] = [];
+            for (let i = 0; i < words.length; i += CHUNK_WORDS) {
+                chunks.push(words.slice(i, i + CHUNK_WORDS).join(' '));
             }
 
-            const prompt = `Você é um analisador de comentários bíblicos. Leia o texto abaixo e extraia os comentários sobre passagens bíblicas específicas.
+            setScanProgress({ current: 0, total: chunks.length });
+
+            // 3. Process each chunk sequentially, accumulate results
+            const allCommentaries: any[] = [];
+            for (let idx = 0; idx < chunks.length; idx++) {
+                setScanProgress({ current: idx + 1, total: chunks.length });
+                const chunk = chunks[idx];
+
+                const prompt = `Você é um analisador de comentários bíblicos. Leia o trecho abaixo (parte ${idx + 1} de ${chunks.length} de um documento maior) e extraia APENAS os comentários sobre passagens bíblicas específicas que estejam NESTE trecho.
 Para cada passagem encontrada, retorne: o Livro (em português, por extenso), o Capítulo (número), o Versículo (número ou null se for sobre o capítulo inteiro), e o Texto do comentário.
 Use o autor "${scanAuthor}" para todos os registros.
+Se não houver nenhuma passagem bíblica neste trecho, retorne um array vazio [].
 
-Texto extraído do PDF:
+Trecho do PDF:
 """
-${fullText.substring(0, 12000)}
+${chunk}
 """
 
 Responda APENAS em JSON com um array de objetos com as chaves: "author", "book", "chapter", "verse", "text". Sem markdown, sem explicações, apenas JSON puro.`;
 
-            const responseText = await generateAIContent({ prompt, isJson: true });
-            const parsed = parseAIJsonArray(responseText);
-            setParsedCommentaries(parsed.map((item: any) => ({
-                ...item,
-                id: Math.random().toString(36)
-            })));
+                try {
+                    const responseText = await generateAIContent({ prompt, isJson: true });
+                    const parsed = parseAIJsonArray(responseText);
+                    allCommentaries.push(...parsed.map((item: any) => ({
+                        ...item,
+                        id: Math.random().toString(36)
+                    })));
+                    // Update table incrementally so user can see progress
+                    setParsedCommentaries([...allCommentaries]);
+                } catch (chunkErr: any) {
+                    // Don't abort — log error for this chunk and continue
+                    console.warn(`Erro no segmento ${idx + 1}:`, chunkErr);
+                }
+            }
+
+            if (allCommentaries.length === 0) {
+                setScanError('Nenhum comentário bíblico identificado no documento. Verifique se o PDF contém texto selecionável (não é uma imagem escaneada).');
+            }
         } catch (e: any) {
             setScanError(formatGeminiError(e, 'Falha ao escanear o PDF.'));
         } finally {
             setScanLoading(false);
+            setScanProgress({ current: 0, total: 0 });
         }
     };
 
@@ -1702,7 +1732,11 @@ Responda APENAS em JSON com um array de objetos com as chaves: "author", "book",
 
                 <label style={{ flex: 1, minWidth: '160px' }}>
                     <div style={{ padding: '14px 20px', backgroundColor: '#6a1b9a', color: 'white', borderRadius: '8px', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                        {scanLoading ? '⏳ Escaneando...' : '📄 Escanear PDF'}
+                        {scanLoading
+                            ? (scanProgress.total > 0
+                                ? `⏳ Segmento ${scanProgress.current}/${scanProgress.total}...`
+                                : '⏳ Extraindo texto...')
+                            : '📄 Escanear PDF'}
                     </div>
                     <input
                         type="file"
@@ -1725,12 +1759,35 @@ Responda APENAS em JSON com um array de objetos com as chaves: "author", "book",
                     style={{ width: '100%', marginBottom: '4px' }}
                 />
                 <p style={{ fontSize: '0.78rem', color: '#7b1fa2', margin: 0 }}>
-                    ⚠️ O Ollama processa até 20 páginas por vez. Recomendamos PDFs de até 5–10 páginas para maior precisão.
+                    ✅ Processa PDFs de <strong>qualquer tamanho</strong> — o documento é dividido automaticamente em segmentos de ~4.000 palavras, cada um enviado ao Ollama em sequência. A tabela é preenchida incrementalmente conforme o processamento avança.
                 </p>
             </div>
 
-            {scanLoading && <LoadingSpinner />}
-            {scanError && <ErrorMessage message={scanError} />}
+            {/* Barra de progresso dos segmentos */}
+            {scanLoading && scanProgress.total > 0 && (
+                <div style={{ marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: '#6a1b9a', marginBottom: '5px', fontWeight: 'bold' }}>
+                        <span>🔍 Processando segmento {scanProgress.current} de {scanProgress.total}</span>
+                        <span>{Math.round((scanProgress.current / scanProgress.total) * 100)}%</span>
+                    </div>
+                    <div style={{ height: '10px', backgroundColor: '#ede7f6', borderRadius: '99px', overflow: 'hidden' }}>
+                        <div style={{
+                            height: '100%',
+                            width: `${(scanProgress.current / scanProgress.total) * 100}%`,
+                            backgroundColor: '#8e24aa',
+                            borderRadius: '99px',
+                            transition: 'width 0.4s ease'
+                        }} />
+                    </div>
+                    {parsedCommentaries.length > 0 && (
+                        <p style={{ fontSize: '0.78rem', color: '#555', marginTop: '5px' }}>
+                            {parsedCommentaries.length} comentário(s) extraídos até agora...
+                        </p>
+                    )}
+                </div>
+            )}
+            {scanLoading && scanProgress.total === 0 && <LoadingSpinner />}
+            {!scanLoading && <>{scanError && <ErrorMessage message={scanError} />}</>}
 
             {/* ===== TABELA DE PRÉ-VISUALIZAÇÃO ===== */}
             {parsedCommentaries.length > 0 && (
@@ -1739,7 +1796,7 @@ Responda APENAS em JSON com um array de objetos com as chaves: "author", "book",
                         <div>
                             <h3 style={{ margin: 0, color: '#4a148c' }}>Tabela de Comentários Escaneados</h3>
                             <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: 'var(--text-light)' }}>
-                                {parsedCommentaries.length} item(ns) extraídos. Edite ou exclua antes de salvar.
+                                {parsedCommentaries.length} item(ns) extraídos{scanLoading ? ' (em processamento...)' : '. Edite ou exclua antes de salvar.'}.
                             </p>
                         </div>
                         <button
