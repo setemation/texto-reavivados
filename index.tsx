@@ -908,12 +908,38 @@ const PensamentosView = () => {
     );
 };
 
+const renderFonteLink = (fonte: string) => {
+    if (!fonte) return null;
+    const trimmed = fonte.trim();
+    const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
+    const match = trimmed.match(urlRegex);
+    if (match) {
+        let url = match[0];
+        if (url.toLowerCase().startsWith('www.')) {
+            url = 'https://' + url;
+        }
+        url = url.replace(/[.,;)]$/, '');
+        return (
+            <a href={url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary-color)', textDecoration: 'underline', fontWeight: 'bold' }}>
+                {trimmed}
+            </a>
+        );
+    }
+    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(trimmed)}`;
+    return (
+        <a href={searchUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary-color)', textDecoration: 'underline', fontWeight: 'bold' }}>
+            {trimmed}
+        </a>
+    );
+};
+
 const IlustracoesView = () => {
     const [theme, setTheme] = useState('');
     const [illustrations, setIllustrations] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [checkState, setCheckState] = useState({});
+    const [expandState, setExpandState] = useState({});
 
     const handleSearch = useCallback(async (category = 'notícias', customTheme = null) => {
         const query = customTheme || theme;
@@ -924,9 +950,9 @@ const IlustracoesView = () => {
         if (category === 'notícias' && illustrations.length === 0) setIllustrations([]);
 
         const promptMap = {
-            'notícias': `Encontre 3 notícias reais que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos e a fonte.`,
-            'estudos': `Encontre 2 estudos científicos ou acadêmicos que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos e a fonte.`,
-            'histórias': `Encontre 2 enredos de filmes ou livros que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos e a fonte.`
+            'notícias': `Encontre 3 notícias reais que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos e a fonte (tente incluir uma URL direta se disponível).`,
+            'estudos': `Encontre 2 estudos científicos ou acadêmicos que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos e a fonte (tente incluir uma URL direta se disponível).`,
+            'histórias': `Encontre 2 enredos de filmes ou livros que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos e a fonte (tente incluir uma URL direta se disponível).`
         };
         try {
             const responseText = await generateAIContent({
@@ -956,6 +982,21 @@ const IlustracoesView = () => {
         }
     };
 
+    const handleExpand = async (id, item) => {
+        setExpandState(prev => ({ ...prev, [id]: { loading: true } }));
+        try {
+            const prompt = `Você é um redator auxiliar. Com base na seguinte ilustração (tema "${theme || item.category}"):
+Resumo: "${item.resumo}"
+Fonte: "${item.fonte}"
+
+Gere exatamente mais TRÊS parágrafos detalhados ampliando essa ilustração, contando com mais detalhes históricos, contextuais ou narrativos relevantes sobre o caso/fato descrito. Não inclua introduções nem conclusões, apenas os 3 parágrafos de ampliação.`;
+            const responseText = await generateAIContent({ prompt });
+            setExpandState(prev => ({ ...prev, [id]: { loading: false, result: responseText } }));
+        } catch (e) {
+            setExpandState(prev => ({ ...prev, [id]: { loading: false, result: formatGeminiError(e, 'Erro ao ampliar a ilustração.') } }));
+        }
+    };
+
     useEffect(() => {
         const handler = (e) => {
             if (e.detail) {
@@ -978,13 +1019,28 @@ const IlustracoesView = () => {
             {illustrations.map(item => (
                 <div className="card" key={item.id}>
                     {item.resumo.split('\n').filter(p => p.trim()).map((p, i) => <p key={i}>{p}</p>)}
-                    <p><strong>Fonte:</strong> {item.fonte}</p>
+                    <p><strong>Fonte:</strong> {renderFonteLink(item.fonte)}</p>
                     <div className="quote-actions" style={{ justifyContent: 'flex-end', gap: '10px' }}>
                         <button onClick={() => handleCheck(item.id, item)} disabled={checkState[item.id]?.loading}>Checar</button>
+                        <button onClick={() => handleExpand(item.id, item)} disabled={expandState[item.id]?.loading}>{expandState[item.id]?.loading ? 'Ampliando...' : 'Ampliar'}</button>
                         <button onClick={(e) => handleAddClick(e, 'add-construction-ilustracao', `${item.resumo}\n\nFonte: ${item.fonte}`)}>Adicionar na Construção</button>
                     </div>
                     {checkState[item.id]?.loading && <LoadingSpinner />}
                     {checkState[item.id]?.result && <div className="sub-result">{checkState[item.id].result}</div>}
+                    
+                    {expandState[item.id]?.loading && <LoadingSpinner />}
+                    {expandState[item.id]?.result && (
+                        <div className="sub-result expanded-content" style={{ marginTop: '10px', padding: '12px', backgroundColor: '#f9fbe7', borderRadius: '6px', borderLeft: '4px solid #c0ca33' }}>
+                            <strong style={{ display: 'block', marginBottom: '8px', color: '#558b2f' }}>Ilustração Ampliada:</strong>
+                            {expandState[item.id].result.split('\n').filter(p => p.trim()).map((p, i) => <p key={i} style={{ marginBottom: '8px' }}>{p}</p>)}
+                            <button 
+                                onClick={(e) => handleAddClick(e, 'add-construction-ilustracao', `${item.resumo}\n\nIlustração Ampliada:\n${expandState[item.id].result}\n\nFonte: ${item.fonte}`)}
+                                style={{ marginTop: '10px', fontSize: '0.85rem' }}
+                            >
+                                Adicionar Ampliação na Construção
+                            </button>
+                        </div>
+                    )}
                 </div>
             ))}
             {illustrations.length > 0 && (
