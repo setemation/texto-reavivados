@@ -62,7 +62,7 @@ const parseAIJsonArray = (jsonStr: string): any[] => {
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 const generateAIContent = async ({ prompt, isJson = false, config }: { prompt: string; isJson?: boolean; config?: any }): Promise<string> => {
-    const provider = localStorage.getItem('ai_provider') || 'gemini';
+    const provider = localStorage.getItem('ai_provider') || 'ollama';
     if (provider === 'ollama') {
         const model = localStorage.getItem('ollama_model') || 'qwen2.5:14b';
         const url = localStorage.getItem('ollama_url') || 'http://localhost:11434';
@@ -1220,13 +1220,156 @@ INFORMAÇÕES INSERIDAS:
 };
 
 
+const ChatView = () => {
+    const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; text: string; id: string }[]>(() => {
+        const saved = localStorage.getItem('chat_messages');
+        return saved ? JSON.parse(saved) : [];
+    });
+    const [input, setInput] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+    const messagesEndRef = React.useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        localStorage.setItem('chat_messages', JSON.stringify(messages));
+    }, [messages]);
+
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [messages, loading]);
+
+    const handleSend = async () => {
+        if (!input.trim() || loading) return;
+        const userText = input.trim();
+        setInput('');
+        setError('');
+        
+        const userMsg = { role: 'user' as const, text: userText, id: Math.random().toString(36) };
+        setMessages(prev => [...prev, userMsg]);
+        setLoading(true);
+
+        try {
+            let conversationPrompt = "Você é um assistente de IA prestativo e inteligente. Responda à mensagem do usuário de forma clara e objetiva.\n\n";
+            const history = messages.slice(-6);
+            history.forEach(msg => {
+                conversationPrompt += `${msg.role === 'user' ? 'Usuário' : 'Assistente'}: ${msg.text}\n\n`;
+            });
+            conversationPrompt += `Usuário: ${userText}\n\nAssistente:`;
+
+            const responseText = await generateAIContent({ prompt: conversationPrompt });
+            const assistantMsg = { role: 'assistant' as const, text: responseText, id: Math.random().toString(36) };
+            setMessages(prev => [...prev, assistantMsg]);
+        } catch (e) {
+            setError(formatGeminiError(e, 'Erro ao enviar mensagem.'));
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleClear = () => {
+        if (window.confirm('Deseja realmente limpar o histórico do chat?')) {
+            setMessages([]);
+            localStorage.removeItem('chat_messages');
+        }
+    };
+
+    return (
+        <div className="tab-content">
+            <h2>Chat com a IA</h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <span style={{ fontSize: '0.9rem', color: 'var(--text-light)' }}>
+                    Conectado à IA selecionada nas configurações globais.
+                </span>
+                <button onClick={handleClear} style={{ backgroundColor: '#e0e0e0', color: 'var(--text-color)', fontSize: '0.8rem', padding: '0.5rem 1rem' }}>
+                    Limpar Chat
+                </button>
+            </div>
+            
+            <div style={{ 
+                border: '1px solid var(--border-color)', 
+                borderRadius: '8px', 
+                padding: '1rem', 
+                height: '400px', 
+                overflowY: 'auto', 
+                backgroundColor: '#fafafa',
+                marginBottom: '1rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.75rem'
+            }}>
+                {messages.length === 0 && (
+                    <div style={{ textAlign: 'center', color: 'var(--text-light)', marginTop: '8rem' }}>
+                        Nenhuma mensagem enviada. Digite algo abaixo para conversar com a IA!
+                    </div>
+                )}
+                {messages.map(msg => (
+                    <div key={msg.id} style={{ 
+                        alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                        maxWidth: '80%',
+                        backgroundColor: msg.role === 'user' ? 'var(--primary-color)' : '#eeeeee',
+                        color: msg.role === 'user' ? 'white' : 'var(--text-color)',
+                        padding: '0.75rem 1rem',
+                        borderRadius: msg.role === 'user' ? '12px 12px 0 12px' : '12px 12px 12px 0',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                        position: 'relative'
+                    }}>
+                        <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.95rem', lineHeight: '1.4' }}>
+                            {msg.role === 'user' ? msg.text : parseBold(msg.text)}
+                        </div>
+                        {msg.role === 'assistant' && (
+                            <div className="quote-actions" style={{ 
+                                marginTop: '0.5rem', 
+                                borderTop: '1px solid #ddd', 
+                                paddingTop: '0.5rem',
+                                justifyContent: 'flex-end',
+                                gap: '8px',
+                                display: 'flex'
+                            }}>
+                                <button 
+                                    onClick={() => navigator.clipboard.writeText(msg.text)}
+                                    style={{ padding: '2px 8px', fontSize: '0.7rem', backgroundColor: '#e0e0e0', color: 'var(--text-color)', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                >
+                                    Copiar
+                                </button>
+                                <button 
+                                    onClick={(e) => handleAddClick(e, 'add-construction-ilustracao', msg.text)}
+                                    style={{ padding: '2px 8px', fontSize: '0.7rem', backgroundColor: '#e0e0e0', color: 'var(--text-color)', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                >
+                                    Adicionar na Construção
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                ))}
+                {loading && <LoadingSpinner />}
+                {error && <ErrorMessage message={error} />}
+                <div ref={messagesEndRef} />
+            </div>
+
+            <div className="form-group" style={{ display: 'flex', gap: '0.5rem' }}>
+                <input 
+                    type="text" 
+                    value={input} 
+                    onChange={e => setInput(e.target.value)} 
+                    onKeyDown={e => e.key === 'Enter' && handleSend()} 
+                    placeholder="Faça uma pergunta ou peça algo para a IA..." 
+                    disabled={loading}
+                    style={{ flexGrow: 1 }}
+                />
+                <button onClick={handleSend} disabled={loading}>{loading ? 'Enviando...' : 'Enviar'}</button>
+            </div>
+        </div>
+    );
+};
+
+
 // --- Main App Component ---
 const App = () => {
-    const TABS = ['NAA', 'Capítulo', 'Versículo', 'Pensamentos', 'Ilustrações', 'Construção'];
+    const TABS = ['NAA', 'Capítulo', 'Versículo', 'Pensamentos', 'Ilustrações', 'Construção', 'Chat'];
     const [activeTab, setActiveTab] = useState(TABS[0]);
     const [resetKey, setResetKey] = useState(0);
 
-    const [provider, setProvider] = useState(() => localStorage.getItem('ai_provider') || 'gemini');
+    const [provider, setProvider] = useState(() => localStorage.getItem('ai_provider') || 'ollama');
     const [ollamaModel, setOllamaModel] = useState(() => localStorage.getItem('ollama_model') || 'qwen2.5:14b');
     const [ollamaUrl, setOllamaUrl] = useState(() => localStorage.getItem('ollama_url') || 'http://localhost:11434');
     const [showSettings, setShowSettings] = useState(false);
@@ -1361,6 +1504,7 @@ const App = () => {
                 <div style={{ display: activeTab === 'Pensamentos' ? 'block' : 'none' }}><PensamentosView key={`pensamentos-${resetKey}`} /></div>
                 <div style={{ display: activeTab === 'Ilustrações' ? 'block' : 'none' }}><IlustracoesView key={`ilustracoes-${resetKey}`} /></div>
                 <div style={{ display: activeTab === 'Construção' ? 'block' : 'none' }}><ConstrucaoView key={`construcao-${resetKey}`} /></div>
+                <div style={{ display: activeTab === 'Chat' ? 'block' : 'none' }}><ChatView key={`chat-${resetKey}`} /></div>
             </main>
         </div>
     );

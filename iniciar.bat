@@ -7,6 +7,7 @@ if "%ERRORLEVEL%"=="0" (
     echo [OK] Ollama já está rodando.
 ) else (
     echo [AVISO] Ollama não está rodando. Iniciando Ollama...
+    set OLLAMA_ORIGINS=*
     start "" ollama serve
     :: Aguarda 3 segundos para inicializar o serviço
     timeout /t 3 /nobreak >nul
