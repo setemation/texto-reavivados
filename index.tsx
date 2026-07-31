@@ -33,6 +33,42 @@ const formatGeminiError = (e: any, defaultMessage: string): string => {
 // --- API Wrapper ---
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
+const generateAIContent = async ({ prompt, isJson = false, config }: { prompt: string; isJson?: boolean; config?: any }): Promise<string> => {
+    const provider = localStorage.getItem('ai_provider') || 'gemini';
+    if (provider === 'ollama') {
+        const model = localStorage.getItem('ollama_model') || 'qwen2.5:14b';
+        const url = localStorage.getItem('ollama_url') || 'http://localhost:11434';
+        
+        const body: any = {
+            model: model,
+            prompt: prompt,
+            stream: false
+        };
+        if (isJson) {
+            body.format = 'json';
+        }
+        
+        const res = await fetch(`${url}/api/generate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        
+        if (!res.ok) {
+            throw new Error(`Ollama local respondeu com erro ${res.status}. Certifique-se de que o Ollama está rodando no seu computador e que você já baixou o modelo '${model}' (rode 'ollama pull ${model}' no terminal).`);
+        }
+        const data = await res.json();
+        return data.response;
+    } else {
+        const response = await ai.models.generateContent({
+            model: "gemini-flash-latest",
+            contents: prompt,
+            config: config || (isJson ? { responseMimeType: "application/json" } : undefined)
+        });
+        return response.text;
+    }
+};
+
 // --- Supabase & Local Bible Helper ---
 let cachedBibleText = null;
 const fetchBibleTextLocal = async () => {
@@ -404,9 +440,9 @@ const CapituloView = () => {
 
         try {
             const prompt = `Faça uma análise aprofundada do capítulo ${ref}. Forneça uma síntese do capítulo e identifique os temas mais importantes com seus versículos chave. ${existingTitles}`;
-            const response = await ai.models.generateContent({
-                model: "gemini-flash-latest",
-                contents: prompt,
+            const responseText = await generateAIContent({
+                prompt,
+                isJson: true,
                 config: {
                     responseMimeType: "application/json",
                     responseSchema: {
@@ -430,7 +466,7 @@ const CapituloView = () => {
                     }
                 }
             });
-            const jsonResult = JSON.parse(response.text);
+            const jsonResult = JSON.parse(responseText);
             jsonResult.temasImportantes = await Promise.all(jsonResult.temasImportantes.map(async (tema: { titulo: string; explicacao: string; versiculos: string }) => {
                 const text = await getBibleTextFromRef(ref, tema.versiculos);
                 return { ...tema, versiculosTexto: text };
@@ -540,9 +576,9 @@ D) Análise Etimológica (A Origem) - Raiz da palavra e sua formação históric
 E) Análise de Contexto Literário e Histórico - Cultura e gênero literário que a envolve.
 F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões doutrinárias.`;
 
-            const response = await ai.models.generateContent({
-                model: "gemini-flash-latest",
-                contents: prompt,
+            const responseText = await generateAIContent({
+                prompt,
+                isJson: true,
                 config: {
                     responseMimeType: "application/json",
                     responseSchema: {
@@ -558,7 +594,7 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
                     }
                 }
             });
-            const analysisResult = JSON.parse(response.text);
+            const analysisResult = JSON.parse(responseText);
             setDeepAnalysisState(prev => ({ ...prev, [index]: { loading: false, result: analysisResult } }));
         } catch (e) {
             setDeepAnalysisState(prev => ({ ...prev, [index]: { loading: false, error: formatGeminiError(e, 'Falha ao realizar análise profunda.') } }));
@@ -590,9 +626,9 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
 
 Responda em JSON com as chaves: apresentacaoCapitulo (string), analiseHistoricoCultural (string), analiseTeologica (string), aplicacoes (array de strings onde cada string é o texto do parágrafo de uma aplicação), analiseLinguistica (array de objetos com chaves: palavraOriginal, transliteracao, sentidoEnuances). Destaque termos importantes com ** no corpo dos textos.`;
 
-            const response = await ai.models.generateContent({
-                model: "gemini-flash-latest",
-                contents: prompt,
+            const responseText = await generateAIContent({
+                prompt,
+                isJson: true,
                 config: {
                     responseMimeType: "application/json",
                     responseSchema: {
@@ -619,7 +655,7 @@ Responda em JSON com as chaves: apresentacaoCapitulo (string), analiseHistoricoC
                     }
                 }
             });
-            setResult(JSON.parse(response.text));
+            setResult(JSON.parse(responseText));
         } catch (e) {
             setError(formatGeminiError(e, 'Falha ao analisar o versículo.'));
         } finally {
@@ -762,8 +798,8 @@ const PensamentosView = () => {
     const runSubAction = async (id, prompt, resultKey) => {
         updateSubAction(id, 'loading', true);
         try {
-            const response = await ai.models.generateContent({ model: "gemini-flash-latest", contents: prompt });
-            updateSubAction(id, resultKey, response.text);
+            const responseText = await generateAIContent({ prompt });
+            updateSubAction(id, resultKey, responseText);
         } catch (e) {
             updateSubAction(id, resultKey, formatGeminiError(e, 'Erro ao processar a solicitação.'));
         } finally {
@@ -785,15 +821,15 @@ const PensamentosView = () => {
         try {
             const existingQuotes = more ? `Evite citações semelhantes a estas: ${quotes.map(q => q.quote).join('; ')}` : '';
             const prompt = `Encontre ${more ? 5 : 10} citações diretas (verbatim) sobre "${query}". ATENÇÃO: Coloque SOMENTE citações que realmente existam. Confirme e verifique a veracidade e autenticidade de cada uma antes de apresentá-las. Não use paráfrases ou inspirações, apenas transcrições exatas. Não cite textos bíblicos. ${existingQuotes}. Responda em JSON com um array de objetos, cada um com as chaves "quote" e "source".`;
-            const response = await ai.models.generateContent({
-                model: "gemini-flash-latest",
-                contents: prompt,
+            const responseText = await generateAIContent({
+                prompt,
+                isJson: true,
                 config: {
                     responseMimeType: "application/json",
                     responseSchema: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { quote: { type: Type.STRING }, source: { type: Type.STRING } } } }
                 }
             });
-            const newQuotes = JSON.parse(response.text).map(q => ({ ...q, id: Math.random().toString(36) }));
+            const newQuotes = JSON.parse(responseText).map((q: any) => ({ ...q, id: Math.random().toString(36) }));
             setQuotes(prev => more ? [...prev, ...newQuotes] : newQuotes);
         } catch (e) {
             setError(formatGeminiError(e, 'Falha ao buscar pensamentos.'));
@@ -865,15 +901,15 @@ const IlustracoesView = () => {
             'histórias': `Encontre 2 enredos de filmes ou livros que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos e a fonte.`
         };
         try {
-            const response = await ai.models.generateContent({
-                model: "gemini-flash-latest",
-                contents: promptMap[category] + ' Responda em JSON com um array de objetos, cada um com "resumo" e "fonte".',
+            const responseText = await generateAIContent({
+                prompt: promptMap[category] + ' Responda em JSON com um array de objetos, cada um com "resumo" e "fonte".',
+                isJson: true,
                 config: {
                     responseMimeType: "application/json",
                     responseSchema: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { resumo: { type: Type.STRING }, fonte: { type: Type.STRING } } } }
                 }
             });
-            const newItems = JSON.parse(response.text).map(item => ({ ...item, id: Math.random().toString(36), category }));
+            const newItems = JSON.parse(responseText).map((item: any) => ({ ...item, id: Math.random().toString(36), category }));
             setIllustrations(prev => [...prev, ...newItems]);
         } catch (e) {
             setError(formatGeminiError(e, 'Falha ao buscar ilustrações.'));
@@ -885,8 +921,8 @@ const IlustracoesView = () => {
     const handleCheck = async (id, item) => {
         setCheckState(prev => ({ ...prev, [id]: { loading: true } }));
         try {
-            const response = await ai.models.generateContent({ model: "gemini-flash-latest", contents: `Verifique a confiabilidade da notícia/fonte: ${item.fonte} sobre o resumo: "${item.resumo}"` });
-            setCheckState(prev => ({ ...prev, [id]: { loading: false, result: response.text } }));
+            const responseText = await generateAIContent({ prompt: `Verifique a confiabilidade da notícia/fonte: ${item.fonte} sobre o resumo: "${item.resumo}"` });
+            setCheckState(prev => ({ ...prev, [id]: { loading: false, result: responseText } }));
         } catch (e) {
             setCheckState(prev => ({ ...prev, [id]: { loading: false, result: formatGeminiError(e, 'Erro na verificação.') } }));
         }
@@ -1032,11 +1068,8 @@ INFORMAÇÕES INSERIDAS:
 - APLICAÇÕES: ${form.aplicacoes || 'Não informado'}
             `;
 
-            const response = await ai.models.generateContent({
-                model: "gemini-flash-latest",
-                contents: prompt
-            });
-            setResult(response.text);
+            const responseText = await generateAIContent({ prompt });
+            setResult(responseText);
         } catch (e) {
             setError(formatGeminiError(e, 'Falha ao construir o texto.'));
         } finally {
@@ -1104,6 +1137,26 @@ const App = () => {
     const [activeTab, setActiveTab] = useState(TABS[0]);
     const [resetKey, setResetKey] = useState(0);
 
+    const [provider, setProvider] = useState(() => localStorage.getItem('ai_provider') || 'gemini');
+    const [ollamaModel, setOllamaModel] = useState(() => localStorage.getItem('ollama_model') || 'qwen2.5:14b');
+    const [ollamaUrl, setOllamaUrl] = useState(() => localStorage.getItem('ollama_url') || 'http://localhost:11434');
+    const [showSettings, setShowSettings] = useState(false);
+
+    const handleProviderChange = (val: string) => {
+        setProvider(val);
+        localStorage.setItem('ai_provider', val);
+    };
+
+    const handleModelChange = (val: string) => {
+        setOllamaModel(val);
+        localStorage.setItem('ollama_model', val);
+    };
+
+    const handleUrlChange = (val: string) => {
+        setOllamaUrl(val);
+        localStorage.setItem('ollama_url', val);
+    };
+
     useEffect(() => {
         const handleAnalyze = () => setActiveTab('Versículo');
         const handleThoughts = () => setActiveTab('Pensamentos');
@@ -1125,9 +1178,82 @@ const App = () => {
 
     return (
         <div className="app-container">
-            <header>
-                <h1>REDATOR REAVIVADOS 2.0</h1>
+            <header style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                <h1 style={{ margin: 0 }}>REDATOR REAVIVADOS 2.0</h1>
+                <button 
+                    onClick={() => setShowSettings(!showSettings)} 
+                    style={{
+                        marginTop: '10px',
+                        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                        border: 'none',
+                        color: 'white',
+                        padding: '6px 12px',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '0.85rem',
+                        fontWeight: 'bold',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        transition: 'background-color 0.2s'
+                    }}
+                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.3)'}
+                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.2)'}
+                >
+                    ⚙️ Provedor: {provider === 'gemini' ? 'Gemini (Nuvem)' : `Ollama (${ollamaModel})`}
+                </button>
             </header>
+
+            {showSettings && (
+                <div style={{
+                    backgroundColor: '#e3f2fd',
+                    borderBottom: '1px solid #bbdefb',
+                    padding: '1.25rem',
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: '1.25rem',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', minWidth: '160px' }}>
+                        <label style={{ fontWeight: 'bold', fontSize: '0.8rem', color: '#0d47a1' }}>PROVEDOR DE IA:</label>
+                        <select 
+                            value={provider} 
+                            onChange={(e) => handleProviderChange(e.target.value)}
+                            style={{ padding: '8px', borderRadius: '4px', border: '1px solid #90caf9', fontSize: '0.9rem', backgroundColor: 'white', cursor: 'pointer' }}
+                        >
+                            <option value="gemini">Gemini (Nuvem)</option>
+                            <option value="ollama">Ollama (Local)</option>
+                        </select>
+                    </div>
+
+                    {provider === 'ollama' && (
+                        <>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', flexGrow: 1, minWidth: '180px' }}>
+                                <label style={{ fontWeight: 'bold', fontSize: '0.8rem', color: '#0d47a1' }}>MODELO LOCAL (OLLAMA):</label>
+                                <input 
+                                    type="text" 
+                                    value={ollamaModel} 
+                                    onChange={(e) => handleModelChange(e.target.value)}
+                                    placeholder="Ex: qwen2.5:14b ou llama3.1:8b"
+                                    style={{ padding: '8px', borderRadius: '4px', border: '1px solid #90caf9', fontSize: '0.9rem', backgroundColor: 'white' }}
+                                />
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', flexGrow: 1, minWidth: '180px' }}>
+                                <label style={{ fontWeight: 'bold', fontSize: '0.8rem', color: '#0d47a1' }}>ENDEREÇO DO SERVER:</label>
+                                <input 
+                                    type="text" 
+                                    value={ollamaUrl} 
+                                    onChange={(e) => handleUrlChange(e.target.value)}
+                                    placeholder="Ex: http://localhost:11434"
+                                    style={{ padding: '8px', borderRadius: '4px', border: '1px solid #90caf9', fontSize: '0.9rem', backgroundColor: 'white' }}
+                                />
+                            </div>
+                        </>
+                    )}
+                </div>
+            )}
+
             <nav className="tab-nav">
                 {TABS.map(tab => (
                     <button
