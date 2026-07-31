@@ -1426,9 +1426,276 @@ const ChatView = () => {
 };
 
 
+const ImportarView = () => {
+    const [documentText, setDocumentText] = useState('');
+    const [defaultAuthor, setDefaultAuthor] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
+    const [parsedCommentaries, setParsedCommentaries] = useState<any[]>([]);
+
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        
+        setError('');
+        setSuccess('');
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const text = event.target?.result as string;
+            setDocumentText(text);
+        };
+        reader.onerror = () => {
+            setError('Erro ao ler o arquivo selecionado.');
+        };
+        reader.readAsText(file);
+    };
+
+    const handleAnalyze = async () => {
+        if (!documentText.trim()) {
+            setError('Por favor, cole algum texto ou carregue um arquivo primeiro.');
+            return;
+        }
+        if (!defaultAuthor.trim()) {
+            setError('Por favor, defina um Autor Padrão antes de analisar.');
+            return;
+        }
+
+        setLoading(true);
+        setError('');
+        setSuccess('');
+        setParsedCommentaries([]);
+
+        try {
+            const prompt = `Você é um analisador de comentários bíblicos. Sua tarefa é ler o seguinte comentário e extrair informações estruturadas de cada trecho.
+Identifique para cada passagem comentada: o Livro (ex: "Gênesis", "João" - use sempre o nome em português por extenso com acentuação correta), o Capítulo (número), o Versículo (número ou null se for sobre o capítulo todo) e o Texto do comentário.
+Use o autor "${defaultAuthor}" para os comentários extraídos.
+
+Texto para analisar:
+"""
+${documentText}
+"""
+
+Responda APENAS em JSON com um array de objetos, onde cada objeto tem exatamente as seguintes chaves: "author", "book", "chapter", "verse", e "text". Não inclua tags de markdown como \`\`\`json ou explicações, apenas a lista pura JSON no formato:
+[
+  { "author": "${defaultAuthor}", "book": "Gênesis", "chapter": 1, "verse": 1, "text": "texto..." }
+]`;
+
+            const responseText = await generateAIContent({ prompt, isJson: true });
+            const parsed = parseAIJsonArray(responseText);
+            setParsedCommentaries(parsed.map((item: any) => ({
+                ...item,
+                id: Math.random().toString(36)
+            })));
+            setSuccess('Análise concluída! Revise as informações extraídas na tabela abaixo.');
+        } catch (e) {
+            setError(formatGeminiError(e, 'Falha ao analisar o documento com a IA local.'));
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleSaveToSupabase = async () => {
+        if (parsedCommentaries.length === 0) {
+            setError('Não há comentários analisados para salvar.');
+            return;
+        }
+        if (!isSupabaseConfigured()) {
+            setError('Supabase não está configurado. Verifique suas chaves de ambiente.');
+            return;
+        }
+
+        setSaving(true);
+        setError('');
+        setSuccess('');
+
+        try {
+            const dataToInsert = parsedCommentaries.map(({ id, ...rest }) => ({
+                author: rest.author,
+                book: rest.book,
+                chapter: parseInt(rest.chapter, 10),
+                verse: rest.verse ? parseInt(rest.verse, 10) : null,
+                text: rest.text
+            }));
+
+            const { error: insertError } = await supabase
+                .from('commentaries')
+                .insert(dataToInsert);
+
+            if (insertError) throw insertError;
+
+            setSuccess(`Sucesso! ${dataToInsert.length} comentário(s) foram inseridos no Supabase.`);
+            setParsedCommentaries([]);
+            setDocumentText('');
+        } catch (e: any) {
+            setError(`Erro ao salvar no Supabase: ${e.message || e}`);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleDeleteRow = (id: string) => {
+        setParsedCommentaries(prev => prev.filter(item => item.id !== id));
+    };
+
+    const handleEditRow = (id: string, field: string, value: any) => {
+        setParsedCommentaries(prev => prev.map(item => {
+            if (item.id === id) {
+                return { ...item, [field]: value };
+            }
+            return item;
+        }));
+    };
+
+    return (
+        <div className="tab-content">
+            <h2>Importar Comentários Bíblicos</h2>
+            <p style={{ fontSize: '0.9rem', color: 'var(--text-light)', marginBottom: '1rem' }}>
+                Carregue um arquivo ou cole um texto bruto de comentários. A IA local (Ollama) organizará as informações em registros estruturados para salvar no seu Supabase.
+            </p>
+
+            <div style={{ backgroundColor: '#fffde7', borderLeft: '4px solid #fbc02d', padding: '10px 15px', fontSize: '0.85rem', marginBottom: '1.5rem', borderRadius: '4px' }}>
+                ⚠️ <strong>Dica de Uso</strong>: Para melhores resultados com o Ollama local, processe trechos de até 3 ou 4 páginas por vez. Isso evita sobrecarregar o limite de memória do modelo e garante maior precisão.
+            </div>
+
+            <div className="form-section">
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', flexGrow: 1, minWidth: '200px' }}>
+                        <label style={{ fontWeight: 'bold', fontSize: '0.8rem', color: '#0d47a1' }}>AUTOR DOS COMENTÁRIOS (PADRÃO):</label>
+                        <input 
+                            type="text" 
+                            value={defaultAuthor} 
+                            onChange={e => setDefaultAuthor(e.target.value)} 
+                            placeholder="Ex: Spurgeon, Moody, Matthew Henry" 
+                        />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', flexGrow: 1, minWidth: '200px' }}>
+                        <label style={{ fontWeight: 'bold', fontSize: '0.8rem', color: '#0d47a1' }}>CARREGAR ARQUIVO (.txt, .md):</label>
+                        <input 
+                            type="file" 
+                            accept=".txt,.md" 
+                            onChange={handleFileUpload} 
+                            style={{ padding: '6px', fontSize: '0.9rem' }}
+                        />
+                    </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginBottom: '1rem' }}>
+                    <label style={{ fontWeight: 'bold', fontSize: '0.8rem', color: '#0d47a1' }}>TEXTO DO DOCUMENTO:</label>
+                    <textarea 
+                        value={documentText} 
+                        onChange={e => setDocumentText(e.target.value)} 
+                        placeholder="Cole aqui o conteúdo extraído do seu documento ou digite os comentários..."
+                        style={{ minHeight: '180px' }}
+                    />
+                </div>
+
+                <button onClick={handleAnalyze} disabled={loading} className="full-width-button">
+                    {loading ? 'Analisando e Estruturando com IA Local...' : 'Analisar Documento com Ollama'}
+                </button>
+            </div>
+
+            {loading && <LoadingSpinner />}
+            {error && <ErrorMessage message={error} />}
+            {success && <div style={{ color: '#2e7d32', backgroundColor: '#e8f5e9', padding: '10px 15px', borderRadius: '6px', margin: '1rem 0', fontWeight: 'bold' }}>{success}</div>}
+
+            {parsedCommentaries.length > 0 && (
+                <div style={{ marginTop: '2rem' }}>
+                    <h3>Pré-visualização dos Dados Extraídos</h3>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-light)', marginBottom: '1rem' }}>
+                        Você pode editar os campos diretamente na tabela abaixo se a IA cometer algum erro de leitura.
+                    </p>
+
+                    <div style={{ overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px', backgroundColor: 'white' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
+                            <thead>
+                                <tr style={{ backgroundColor: 'var(--background-color)', borderBottom: '2px solid var(--border-color)' }}>
+                                    <th style={{ padding: '12px 15px' }}>Autor</th>
+                                    <th style={{ padding: '12px 15px' }}>Livro</th>
+                                    <th style={{ padding: '12px 15px' }}>Cap.</th>
+                                    <th style={{ padding: '12px 15px' }}>Vers.</th>
+                                    <th style={{ padding: '12px 15px', width: '50%' }}>Comentário</th>
+                                    <th style={{ padding: '12px 15px', textAlign: 'center' }}>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {parsedCommentaries.map((item) => (
+                                    <tr key={item.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                                        <td style={{ padding: '10px 15px' }}>
+                                            <input 
+                                                type="text" 
+                                                value={item.author || ''} 
+                                                onChange={e => handleEditRow(item.id, 'author', e.target.value)}
+                                                style={{ width: '100px', padding: '4px', fontSize: '0.85rem' }} 
+                                            />
+                                        </td>
+                                        <td style={{ padding: '10px 15px' }}>
+                                            <input 
+                                                type="text" 
+                                                value={item.book || ''} 
+                                                onChange={e => handleEditRow(item.id, 'book', e.target.value)}
+                                                style={{ width: '100px', padding: '4px', fontSize: '0.85rem' }} 
+                                            />
+                                        </td>
+                                        <td style={{ padding: '10px 15px' }}>
+                                            <input 
+                                                type="number" 
+                                                value={item.chapter || ''} 
+                                                onChange={e => handleEditRow(item.id, 'chapter', parseInt(e.target.value, 10))}
+                                                style={{ width: '50px', padding: '4px', fontSize: '0.85rem' }} 
+                                            />
+                                        </td>
+                                        <td style={{ padding: '10px 15px' }}>
+                                            <input 
+                                                type="text" 
+                                                value={item.verse === null || item.verse === undefined ? '' : item.verse} 
+                                                onChange={e => handleEditRow(item.id, 'verse', e.target.value === '' ? null : parseInt(e.target.value, 10))}
+                                                placeholder="Todo"
+                                                style={{ width: '50px', padding: '4px', fontSize: '0.85rem' }} 
+                                            />
+                                        </td>
+                                        <td style={{ padding: '10px 15px' }}>
+                                            <textarea 
+                                                value={item.text || ''} 
+                                                onChange={e => handleEditRow(item.id, 'text', e.target.value)}
+                                                style={{ width: '100%', minHeight: '60px', padding: '4px', fontSize: '0.85rem', resize: 'vertical' }} 
+                                            />
+                                        </td>
+                                        <td style={{ padding: '10px 15px', textAlign: 'center' }}>
+                                            <button 
+                                                onClick={() => handleDeleteRow(item.id)}
+                                                style={{ backgroundColor: '#d32f2f', color: 'white', padding: '4px 8px', fontSize: '0.8rem', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                            >
+                                                Excluir
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <button 
+                        onClick={handleSaveToSupabase} 
+                        disabled={saving} 
+                        className="full-width-button"
+                        style={{ marginTop: '1.5rem', backgroundColor: '#2e7d32' }}
+                        onMouseOver={e => e.currentTarget.style.backgroundColor = '#1b5e20'}
+                        onMouseOut={e => e.currentTarget.style.backgroundColor = '#2e7d32'}
+                    >
+                        {saving ? 'Gravando no Supabase...' : 'Confirmar e Gravar no Supabase'}
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+};
+
+
 // --- Main App Component ---
 const App = () => {
-    const TABS = ['NAA', 'Capítulo', 'Versículo', 'Pensamentos', 'Ilustrações', 'Construção', 'Chat'];
+    const TABS = ['NAA', 'Capítulo', 'Versículo', 'Pensamentos', 'Ilustrações', 'Construção', 'Chat', 'Importar'];
     const [activeTab, setActiveTab] = useState(TABS[0]);
     const [resetKey, setResetKey] = useState(0);
 
@@ -1568,6 +1835,7 @@ const App = () => {
                 <div style={{ display: activeTab === 'Ilustrações' ? 'block' : 'none' }}><IlustracoesView key={`ilustracoes-${resetKey}`} /></div>
                 <div style={{ display: activeTab === 'Construção' ? 'block' : 'none' }}><ConstrucaoView key={`construcao-${resetKey}`} /></div>
                 <div style={{ display: activeTab === 'Chat' ? 'block' : 'none' }}><ChatView key={`chat-${resetKey}`} /></div>
+                <div style={{ display: activeTab === 'Importar' ? 'block' : 'none' }}><ImportarView key={`importar-${resetKey}`} /></div>
             </main>
         </div>
     );
