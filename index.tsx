@@ -257,6 +257,31 @@ const getBibleTextFromRef = async (ref: string, defaultVersesStr = ''): Promise<
     return extractVersesFromRefLocal(bibleText, ref, defaultVersesStr);
 };
 
+const fetchCommentaries = async (refStr: string): Promise<any[]> => {
+    if (!isSupabaseConfigured()) return [];
+    try {
+        const match = refStr.trim().match(/^(.+?)\s+(\d+):?(.*)$/);
+        if (!match) return [];
+        const book = match[1].trim();
+        const chapter = parseInt(match[2], 10);
+        
+        const { data, error } = await supabase
+            .from('commentaries')
+            .select('author, text, verse')
+            .eq('book', book)
+            .eq('chapter', chapter);
+            
+        if (error) {
+            console.error('Erro ao buscar comentários do Supabase:', error);
+            return [];
+        }
+        return data || [];
+    } catch (e) {
+        console.error('Erro ao buscar comentários:', e);
+        return [];
+    }
+};
+
 // --- Tab Content Components ---
 
 // --- NAA Helper Data ---
@@ -432,6 +457,7 @@ const CapituloView = () => {
     const [error, setError] = useState('');
     const [fullTextModal, setFullTextModal] = useState({ show: false, text: '', title: '' });
     const [loadingText, setLoadingText] = useState(false);
+    const [usedCommentaries, setUsedCommentaries] = useState<any[]>([]);
 
     const handleViewText = useCallback(async () => {
         if (!ref) return;
@@ -459,6 +485,7 @@ const CapituloView = () => {
         }
         setLoading(true);
         setError('');
+        setUsedCommentaries([]);
 
         let existingTitles = '';
         if (more && result && result.temasImportantes) {
@@ -467,7 +494,19 @@ const CapituloView = () => {
         setResult(null);
 
         try {
-            const prompt = `Faça uma análise aprofundada do capítulo ${ref}. Forneça uma síntese do capítulo e identifique os temas mais importantes com seus versículos chave. ${existingTitles}`;
+            const commentaries = await fetchCommentaries(ref);
+            setUsedCommentaries(commentaries);
+
+            let prompt = `Faça uma análise aprofundada do capítulo ${ref}. Forneça uma síntese do capítulo e identifique os temas mais importantes com seus versículos chave. ${existingTitles}`;
+            
+            if (commentaries.length > 0) {
+                prompt += `\n\nConsidere e incorpore ativamente em sua análise teológica as informações dos seguintes comentários históricos de apoio:\n`;
+                commentaries.forEach(c => {
+                    const verseInfo = c.verse ? ` (Versículo ${c.verse})` : '';
+                    prompt += `- Comentário de ${c.author}${verseInfo}: "${c.text}"\n`;
+                });
+            }
+
             const responseText = await generateAIContent({
                 prompt,
                 isJson: true,
@@ -505,7 +544,7 @@ const CapituloView = () => {
         } finally {
             setLoading(false);
         }
-    }, [ref]);
+    }, [ref, result]);
 
     return (
         <div className="tab-content">
@@ -519,6 +558,11 @@ const CapituloView = () => {
             {error && <ErrorMessage message={error} />}
             {result && (
                 <div>
+                    {usedCommentaries.length > 0 && (
+                        <div style={{ fontSize: '0.85rem', color: '#1565c0', backgroundColor: '#e3f2fd', padding: '10px 15px', borderRadius: '6px', marginBottom: '15px', borderLeft: '4px solid #2196f3' }}>
+                            <strong>📖 Comentários utilizados do Supabase:</strong> {Array.from(new Set(usedCommentaries.map(c => c.author))).join(', ')}
+                        </div>
+                    )}
                     <div className="card">
                         <h3>Síntese do Capítulo</h3>
                         {(result.sinteseCapitulo || '').split(/\n+/).filter(p => p.trim()).map((p, i) => (
@@ -590,6 +634,7 @@ const VersiculoView = () => {
     const [error, setError] = useState('');
     const [verseText, setVerseText] = useState('');
     const [deepAnalysisState, setDeepAnalysisState] = useState({});
+    const [usedCommentaries, setUsedCommentaries] = useState<any[]>([]);
 
     const handleDeepAnalysis = async (index, item) => {
         setDeepAnalysisState(prev => ({ ...prev, [index]: { loading: true } }));
@@ -638,13 +683,18 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
         setResult(null);
         setVerseText('');
         setDeepAnalysisState({});
+        setUsedCommentaries([]);
 
         try {
             const vText = await getBibleTextFromRef(targetRef);
             if (vText && !vText.startsWith("Capítulo não encontrado") && !vText.startsWith("Referência inválida")) {
                 setVerseText(vText);
             }
-            const prompt = `Faça uma exegese detalhada de ${targetRef}. Siga estas instruções estritas para cada seção:
+
+            const commentaries = await fetchCommentaries(targetRef);
+            setUsedCommentaries(commentaries);
+
+            let prompt = `Faça uma exegese detalhada de ${targetRef}. Siga estas instruções estritas para cada seção:
 
 1. **Apresentação do Capítulo**: Escreva exatamente dois parágrafos apresentando o contexto geral do capítulo.
 2. **Análise Histórico-Cultural**: Escreva exatamente quatro parágrafos com informações sobre o contexto da época (política, religião, sociedade, costumes, leis, práticas, cidades, etc.) relacionadas ao versículo. **Cada tema deve estar em um parágrafo separado por duas quebras de linha**.
@@ -653,6 +703,14 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
 5. **Aplicações**: Gere 4 parágrafos. Cada um sugerindo uma aplicação prática e concreta conectada ao versículo. As aplicações devem conter: Atitudes, decisões, mudanças de mentalidade; Encorajamento, consolo, exortação, esperança; Exemplos contemporâneos que ajudem a aplicar o texto na vida real. Apresentação: a primeira frase de cada aplicação (que resume a ideia principal) deve estar em negrito (ex: **Pratique o perdão diariamente.**). Pule uma linha entre cada parágrafo e não use a palavra literal "Frase resumo".
 
 Responda em JSON com as chaves: apresentacaoCapitulo (string), analiseHistoricoCultural (string), analiseTeologica (string), aplicacoes (array de strings onde cada string é o texto do parágrafo de uma aplicação), analiseLinguistica (array de objetos com chaves: palavraOriginal, transliteracao, sentidoEnuances). Destaque termos importantes com ** no corpo dos textos.`;
+
+            if (commentaries.length > 0) {
+                prompt += `\n\nConsidere e utilize obrigatoriamente as informações dos seguintes comentários históricos de apoio para enriquecer a exegese teológica e histórico-cultural:\n`;
+                commentaries.forEach(c => {
+                    const verseInfo = c.verse ? ` (no versículo ${c.verse})` : '';
+                    prompt += `- Comentário de ${c.author}${verseInfo}: "${c.text}"\n`;
+                });
+            }
 
             const responseText = await generateAIContent({
                 prompt,
@@ -715,6 +773,11 @@ Responda em JSON com as chaves: apresentacaoCapitulo (string), analiseHistoricoC
             {error && <ErrorMessage message={error} />}
             {result && (
                 <div>
+                    {usedCommentaries.length > 0 && (
+                        <div style={{ fontSize: '0.85rem', color: '#1565c0', backgroundColor: '#e3f2fd', padding: '10px 15px', borderRadius: '6px', marginBottom: '15px', borderLeft: '4px solid #2196f3' }}>
+                            <strong>📖 Comentários utilizados do Supabase:</strong> {Array.from(new Set(usedCommentaries.map(c => c.author))).join(', ')}
+                        </div>
+                    )}
                     <div className="card">
                         <h3>Apresentação do Capítulo</h3>
                         {(result.apresentacaoCapitulo || '').split(/\n+/).filter(p => p.trim()).map((p, i, arr) => (
