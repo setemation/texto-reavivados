@@ -1426,61 +1426,149 @@ const ChatView = () => {
 };
 
 
-const ImportarView = () => {
-    const [documentText, setDocumentText] = useState('');
-    const [defaultAuthor, setDefaultAuthor] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [saving, setSaving] = useState(false);
-    const [error, setError] = useState('');
-    const [success, setSuccess] = useState('');
-    const [parsedCommentaries, setParsedCommentaries] = useState<any[]>([]);
+// Helper: flat list of all books
+const ALL_BOOKS = Object.values(NAA_BOOKS).flat();
 
-    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        
-        setError('');
-        setSuccess('');
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const text = event.target?.result as string;
-            setDocumentText(text);
-        };
-        reader.onerror = () => {
-            setError('Erro ao ler o arquivo selecionado.');
-        };
-        reader.readAsText(file);
+const ImportarView = () => {
+    // --- Browser State ---
+    const [browseBook, setBrowseBook] = useState<any>(null);
+    const [browseChapter, setBrowseChapter] = useState<number | null>(null);
+    const [browseCommentaries, setBrowseCommentaries] = useState<any[]>([]);
+    const [browseLoading, setBrowseLoading] = useState(false);
+    const [browseError, setBrowseError] = useState('');
+
+    // --- Anexar Modal State ---
+    const [showAnexarModal, setShowAnexarModal] = useState(false);
+    const [formAuthor, setFormAuthor] = useState('');
+    const [formBook, setFormBook] = useState(ALL_BOOKS[0]?.name || '');
+    const [formChapter, setFormChapter] = useState(1);
+    const [formVerse, setFormVerse] = useState('');
+    const [formText, setFormText] = useState('');
+    const [formSaving, setFormSaving] = useState(false);
+    const [formError, setFormError] = useState('');
+    const [formSuccess, setFormSuccess] = useState('');
+
+    // --- Escanear (PDF) State ---
+    const [scanLoading, setScanLoading] = useState(false);
+    const [scanError, setScanError] = useState('');
+    const [scanAuthor, setScanAuthor] = useState('');
+    const [parsedCommentaries, setParsedCommentaries] = useState<any[]>([]);
+    const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState('');
+    const [saveSuccess, setSaveSuccess] = useState('');
+
+    // --- Browse Logic ---
+    const loadBrowseCommentaries = async (book: any, chapter: number) => {
+        if (!isSupabaseConfigured()) { setBrowseError('Supabase não configurado.'); return; }
+        setBrowseLoading(true);
+        setBrowseError('');
+        setBrowseCommentaries([]);
+        try {
+            const { data, error } = await supabase
+                .from('commentaries')
+                .select('*')
+                .eq('book', book.name)
+                .eq('chapter', chapter)
+                .order('verse', { ascending: true });
+            if (error) throw error;
+            setBrowseCommentaries(data || []);
+        } catch (e: any) {
+            setBrowseError(`Erro ao buscar comentários: ${e.message || e}`);
+        } finally {
+            setBrowseLoading(false);
+        }
     };
 
-    const handleAnalyze = async () => {
-        if (!documentText.trim()) {
-            setError('Por favor, cole algum texto ou carregue um arquivo primeiro.');
-            return;
-        }
-        if (!defaultAuthor.trim()) {
-            setError('Por favor, defina um Autor Padrão antes de analisar.');
-            return;
-        }
+    const handleBrowseBook = (book: any) => {
+        setBrowseBook(book);
+        setBrowseChapter(null);
+        setBrowseCommentaries([]);
+        setBrowseError('');
+    };
 
-        setLoading(true);
-        setError('');
-        setSuccess('');
-        setParsedCommentaries([]);
+    const handleBrowseChapter = (ch: number) => {
+        setBrowseChapter(ch);
+        if (browseBook) loadBrowseCommentaries(browseBook, ch);
+    };
 
+    // --- Anexar Modal Logic ---
+    const selectedBookObj = ALL_BOOKS.find(b => b.name === formBook) || ALL_BOOKS[0];
+    const formBookChapters = selectedBookObj?.chapters || 1;
+
+    const handleAnexarSave = async () => {
+        if (!formAuthor.trim() || !formText.trim()) {
+            setFormError('Preencha pelo menos Autor e Texto.'); return;
+        }
+        setFormSaving(true); setFormError(''); setFormSuccess('');
         try {
-            const prompt = `Você é um analisador de comentários bíblicos. Sua tarefa é ler o seguinte comentário e extrair informações estruturadas de cada trecho.
-Identifique para cada passagem comentada: o Livro (ex: "Gênesis", "João" - use sempre o nome em português por extenso com acentuação correta), o Capítulo (número), o Versículo (número ou null se for sobre o capítulo todo) e o Texto do comentário.
-Use o autor "${defaultAuthor}" para os comentários extraídos.
+            const { error: err } = await supabase.from('commentaries').insert([{
+                author: formAuthor.trim(),
+                book: formBook,
+                chapter: formChapter,
+                verse: formVerse ? parseInt(formVerse, 10) : null,
+                text: formText.trim()
+            }]);
+            if (err) throw err;
+            setFormSuccess('Comentário adicionado com sucesso!');
+            setFormText(''); setFormVerse(''); setFormAuthor('');
+            // Reload browse if same passage
+            if (browseBook?.name === formBook && browseChapter === formChapter) {
+                loadBrowseCommentaries(browseBook, formChapter);
+            }
+            setTimeout(() => { setShowAnexarModal(false); setFormSuccess(''); }, 1500);
+        } catch (e: any) {
+            setFormError(`Erro: ${e.message || e}`);
+        } finally { setFormSaving(false); }
+    };
 
-Texto para analisar:
+    // --- PDF Scan Logic ---
+    const loadPdfJs = (): Promise<any> => {
+        return new Promise((resolve, reject) => {
+            if ((window as any).pdfjsLib) { resolve((window as any).pdfjsLib); return; }
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+            script.onload = () => {
+                const lib = (window as any).pdfjsLib;
+                lib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                resolve(lib);
+            };
+            script.onerror = () => reject(new Error('Falha ao carregar PDF.js'));
+            document.head.appendChild(script);
+        });
+    };
+
+    const handleScanPdf = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file) return;
+        if (!scanAuthor.trim()) { setScanError('Defina o autor antes de escanear.'); return; }
+
+        setScanLoading(true); setScanError(''); setParsedCommentaries([]);
+        try {
+            const pdfjsLib = await loadPdfJs();
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            let fullText = '';
+            const maxPages = Math.min(pdf.numPages, 20); // limit to 20 pages for Ollama context
+            for (let p = 1; p <= maxPages; p++) {
+                const page = await pdf.getPage(p);
+                const content = await page.getTextContent();
+                fullText += content.items.map((i: any) => i.str).join(' ') + '\n';
+            }
+            if (pdf.numPages > 20) {
+                setScanError(`Aviso: O PDF tem ${pdf.numPages} páginas. Apenas as primeiras 20 foram processadas para manter a performance do Ollama.`);
+            }
+
+            const prompt = `Você é um analisador de comentários bíblicos. Leia o texto abaixo e extraia os comentários sobre passagens bíblicas específicas.
+Para cada passagem encontrada, retorne: o Livro (em português, por extenso), o Capítulo (número), o Versículo (número ou null se for sobre o capítulo inteiro), e o Texto do comentário.
+Use o autor "${scanAuthor}" para todos os registros.
+
+Texto extraído do PDF:
 """
-${documentText}
+${fullText.substring(0, 12000)}
 """
 
-Responda APENAS em JSON com um array de objetos, onde cada objeto tem exatamente as seguintes chaves: "author", "book", "chapter", "verse", e "text". Não inclua tags de markdown como \`\`\`json ou explicações, apenas a lista pura JSON no formato:
-[
-  { "author": "${defaultAuthor}", "book": "Gênesis", "chapter": 1, "verse": 1, "text": "texto..." }
-]`;
+Responda APENAS em JSON com um array de objetos com as chaves: "author", "book", "chapter", "verse", "text". Sem markdown, sem explicações, apenas JSON puro.`;
 
             const responseText = await generateAIContent({ prompt, isJson: true });
             const parsed = parseAIJsonArray(responseText);
@@ -1488,28 +1576,25 @@ Responda APENAS em JSON com um array de objetos, onde cada objeto tem exatamente
                 ...item,
                 id: Math.random().toString(36)
             })));
-            setSuccess('Análise concluída! Revise as informações extraídas na tabela abaixo.');
-        } catch (e) {
-            setError(formatGeminiError(e, 'Falha ao analisar o documento com a IA local.'));
+        } catch (e: any) {
+            setScanError(formatGeminiError(e, 'Falha ao escanear o PDF.'));
         } finally {
-            setLoading(false);
+            setScanLoading(false);
         }
     };
 
-    const handleSaveToSupabase = async () => {
-        if (parsedCommentaries.length === 0) {
-            setError('Não há comentários analisados para salvar.');
-            return;
-        }
-        if (!isSupabaseConfigured()) {
-            setError('Supabase não está configurado. Verifique suas chaves de ambiente.');
-            return;
-        }
+    const handleEditRow = (id: string, field: string, value: any) => {
+        setParsedCommentaries(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
+    };
 
-        setSaving(true);
-        setError('');
-        setSuccess('');
+    const handleDeleteRow = (id: string) => {
+        setParsedCommentaries(prev => prev.filter(item => item.id !== id));
+    };
 
+    const handleAdicionarTabela = async () => {
+        if (parsedCommentaries.length === 0) { setSaveError('Nenhum item na tabela para salvar.'); return; }
+        if (!isSupabaseConfigured()) { setSaveError('Supabase não configurado.'); return; }
+        setSaving(true); setSaveError(''); setSaveSuccess('');
         try {
             const dataToInsert = parsedCommentaries.map(({ id, ...rest }) => ({
                 author: rest.author,
@@ -1518,155 +1603,189 @@ Responda APENAS em JSON com um array de objetos, onde cada objeto tem exatamente
                 verse: rest.verse ? parseInt(rest.verse, 10) : null,
                 text: rest.text
             }));
-
-            const { error: insertError } = await supabase
-                .from('commentaries')
-                .insert(dataToInsert);
-
-            if (insertError) throw insertError;
-
-            setSuccess(`Sucesso! ${dataToInsert.length} comentário(s) foram inseridos no Supabase.`);
+            const { error: err } = await supabase.from('commentaries').insert(dataToInsert);
+            if (err) throw err;
+            setSaveSuccess(`✅ ${dataToInsert.length} comentário(s) inseridos no Supabase com sucesso!`);
             setParsedCommentaries([]);
-            setDocumentText('');
         } catch (e: any) {
-            setError(`Erro ao salvar no Supabase: ${e.message || e}`);
-        } finally {
-            setSaving(false);
-        }
+            setSaveError(`Erro ao salvar: ${e.message || e}`);
+        } finally { setSaving(false); }
     };
 
-    const handleDeleteRow = (id: string) => {
-        setParsedCommentaries(prev => prev.filter(item => item.id !== id));
-    };
-
-    const handleEditRow = (id: string, field: string, value: any) => {
-        setParsedCommentaries(prev => prev.map(item => {
-            if (item.id === id) {
-                return { ...item, [field]: value };
-            }
-            return item;
-        }));
-    };
+    // --- Render Helpers ---
+    const sectionLabel = { fontWeight: 'bold' as const, fontSize: '0.75rem', color: '#0d47a1', textTransform: 'uppercase' as const, letterSpacing: '0.05em', marginBottom: '6px', display: 'block' };
+    const panelStyle = { border: '1px solid var(--border-color)', borderRadius: '10px', padding: '1.25rem', backgroundColor: 'white', marginBottom: '1.5rem' };
 
     return (
         <div className="tab-content">
-            <h2>Importar Comentários Bíblicos</h2>
-            <p style={{ fontSize: '0.9rem', color: 'var(--text-light)', marginBottom: '1rem' }}>
-                Carregue um arquivo ou cole um texto bruto de comentários. A IA local (Ollama) organizará as informações em registros estruturados para salvar no seu Supabase.
-            </p>
+            <h2>Importar Comentários</h2>
 
-            <div style={{ backgroundColor: '#fffde7', borderLeft: '4px solid #fbc02d', padding: '10px 15px', fontSize: '0.85rem', marginBottom: '1.5rem', borderRadius: '4px' }}>
-                ⚠️ <strong>Dica de Uso</strong>: Para melhores resultados com o Ollama local, processe trechos de até 3 ou 4 páginas por vez. Isso evita sobrecarregar o limite de memória do modelo e garante maior precisão.
+            {/* ===== NAVEGADOR ===== */}
+            <div style={panelStyle}>
+                <h3 style={{ marginTop: 0, marginBottom: '1rem', color: '#1a237e' }}>📚 Navegador de Comentários</h3>
+
+                <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flexGrow: 1, minWidth: '180px' }}>
+                        <label style={sectionLabel}>Livro</label>
+                        <select
+                            value={browseBook?.name || ''}
+                            onChange={e => {
+                                const b = ALL_BOOKS.find(bk => bk.name === e.target.value);
+                                if (b) handleBrowseBook(b);
+                            }}
+                            style={{ padding: '8px', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '0.9rem' }}
+                        >
+                            <option value="">— Selecione um livro —</option>
+                            {Object.entries(NAA_BOOKS).map(([testament, books]) => (
+                                <optgroup key={testament} label={testament}>
+                                    {books.map(b => <option key={b.name} value={b.name}>{b.name}</option>)}
+                                </optgroup>
+                            ))}
+                        </select>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flexGrow: 1, minWidth: '130px' }}>
+                        <label style={sectionLabel}>Capítulo</label>
+                        <select
+                            value={browseChapter ?? ''}
+                            onChange={e => handleBrowseChapter(parseInt(e.target.value, 10))}
+                            disabled={!browseBook}
+                            style={{ padding: '8px', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '0.9rem' }}
+                        >
+                            <option value="">— Capítulo —</option>
+                            {browseBook && Array.from({ length: browseBook.chapters }, (_, i) => i + 1).map(n => (
+                                <option key={n} value={n}>{n}</option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+
+                {browseLoading && <LoadingSpinner />}
+                {browseError && <ErrorMessage message={browseError} />}
+
+                {browseChapter && !browseLoading && (
+                    browseCommentaries.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-light)', backgroundColor: '#f5f5f5', borderRadius: '8px' }}>
+                            Nenhum comentário encontrado para <strong>{browseBook?.name} {browseChapter}</strong>.<br />
+                            <span style={{ fontSize: '0.85rem' }}>Use o botão <em>Anexar</em> ou <em>Escanear</em> abaixo para adicionar comentários.</span>
+                        </div>
+                    ) : (
+                        <div>
+                            <p style={{ fontSize: '0.85rem', color: 'var(--text-light)', marginBottom: '0.75rem' }}>
+                                <strong>{browseCommentaries.length}</strong> comentário(s) encontrado(s) para <strong>{browseBook?.name} {browseChapter}</strong>:
+                            </p>
+                            {browseCommentaries.map((c, i) => (
+                                <div key={c.id || i} style={{ borderLeft: '4px solid #1565c0', backgroundColor: '#e3f2fd', padding: '12px 15px', borderRadius: '0 8px 8px 0', marginBottom: '0.75rem' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', flexWrap: 'wrap', gap: '4px' }}>
+                                        <span style={{ fontWeight: 'bold', fontSize: '0.85rem', color: '#0d47a1' }}>
+                                            {c.author}
+                                        </span>
+                                        <span style={{ fontSize: '0.8rem', color: '#546e7a', backgroundColor: 'white', padding: '2px 8px', borderRadius: '12px', border: '1px solid #b0bec5' }}>
+                                            {c.verse ? `Versículo ${c.verse}` : 'Capítulo inteiro'}
+                                        </span>
+                                    </div>
+                                    <p style={{ margin: 0, fontSize: '0.9rem', lineHeight: '1.6', color: '#212121' }}>{c.text}</p>
+                                </div>
+                            ))}
+                        </div>
+                    )
+                )}
             </div>
 
-            <div className="form-section">
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', flexGrow: 1, minWidth: '200px' }}>
-                        <label style={{ fontWeight: 'bold', fontSize: '0.8rem', color: '#0d47a1' }}>AUTOR DOS COMENTÁRIOS (PADRÃO):</label>
-                        <input 
-                            type="text" 
-                            value={defaultAuthor} 
-                            onChange={e => setDefaultAuthor(e.target.value)} 
-                            placeholder="Ex: Spurgeon, Moody, Matthew Henry" 
-                        />
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', flexGrow: 1, minWidth: '200px' }}>
-                        <label style={{ fontWeight: 'bold', fontSize: '0.8rem', color: '#0d47a1' }}>CARREGAR ARQUIVO (.txt, .md):</label>
-                        <input 
-                            type="file" 
-                            accept=".txt,.md" 
-                            onChange={handleFileUpload} 
-                            style={{ padding: '6px', fontSize: '0.9rem' }}
-                        />
-                    </div>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginBottom: '1rem' }}>
-                    <label style={{ fontWeight: 'bold', fontSize: '0.8rem', color: '#0d47a1' }}>TEXTO DO DOCUMENTO:</label>
-                    <textarea 
-                        value={documentText} 
-                        onChange={e => setDocumentText(e.target.value)} 
-                        placeholder="Cole aqui o conteúdo extraído do seu documento ou digite os comentários..."
-                        style={{ minHeight: '180px' }}
-                    />
-                </div>
-
-                <button onClick={handleAnalyze} disabled={loading} className="full-width-button">
-                    {loading ? 'Analisando e Estruturando com IA Local...' : 'Analisar Documento com Ollama'}
+            {/* ===== BOTÕES DE AÇÃO ===== */}
+            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
+                <button
+                    onClick={() => { setShowAnexarModal(true); setFormError(''); setFormSuccess(''); }}
+                    style={{ flex: 1, minWidth: '160px', padding: '14px 20px', backgroundColor: '#1565c0', color: 'white', borderRadius: '8px', fontSize: '1rem', fontWeight: 'bold', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                >
+                    📎 Anexar
                 </button>
+
+                <label style={{ flex: 1, minWidth: '160px' }}>
+                    <div style={{ padding: '14px 20px', backgroundColor: '#6a1b9a', color: 'white', borderRadius: '8px', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                        {scanLoading ? '⏳ Escaneando...' : '📄 Escanear PDF'}
+                    </div>
+                    <input
+                        type="file"
+                        accept=".pdf"
+                        style={{ display: 'none' }}
+                        disabled={scanLoading}
+                        onChange={handleScanPdf}
+                    />
+                </label>
             </div>
 
-            {loading && <LoadingSpinner />}
-            {error && <ErrorMessage message={error} />}
-            {success && <div style={{ color: '#2e7d32', backgroundColor: '#e8f5e9', padding: '10px 15px', borderRadius: '6px', margin: '1rem 0', fontWeight: 'bold' }}>{success}</div>}
+            {/* Escanear author config */}
+            <div style={{ ...panelStyle, backgroundColor: '#faf3ff', border: '1px solid #ce93d8' }}>
+                <label style={sectionLabel}>Autor Padrão para Escanear PDF</label>
+                <input
+                    type="text"
+                    value={scanAuthor}
+                    onChange={e => setScanAuthor(e.target.value)}
+                    placeholder="Ex: Matthew Henry, Spurgeon, Moody..."
+                    style={{ width: '100%', marginBottom: '4px' }}
+                />
+                <p style={{ fontSize: '0.78rem', color: '#7b1fa2', margin: 0 }}>
+                    ⚠️ O Ollama processa até 20 páginas por vez. Recomendamos PDFs de até 5–10 páginas para maior precisão.
+                </p>
+            </div>
 
+            {scanLoading && <LoadingSpinner />}
+            {scanError && <ErrorMessage message={scanError} />}
+
+            {/* ===== TABELA DE PRÉ-VISUALIZAÇÃO ===== */}
             {parsedCommentaries.length > 0 && (
-                <div style={{ marginTop: '2rem' }}>
-                    <h3>Pré-visualização dos Dados Extraídos</h3>
-                    <p style={{ fontSize: '0.85rem', color: 'var(--text-light)', marginBottom: '1rem' }}>
-                        Você pode editar os campos diretamente na tabela abaixo se a IA cometer algum erro de leitura.
-                    </p>
+                <div style={panelStyle}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '8px' }}>
+                        <div>
+                            <h3 style={{ margin: 0, color: '#4a148c' }}>Tabela de Comentários Escaneados</h3>
+                            <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: 'var(--text-light)' }}>
+                                {parsedCommentaries.length} item(ns) extraídos. Edite ou exclua antes de salvar.
+                            </p>
+                        </div>
+                        <button
+                            onClick={handleAdicionarTabela}
+                            disabled={saving}
+                            style={{ padding: '10px 22px', backgroundColor: '#2e7d32', color: 'white', borderRadius: '8px', fontWeight: 'bold', border: 'none', cursor: 'pointer', fontSize: '0.95rem' }}
+                        >
+                            {saving ? 'Gravando...' : '✅ Adicionar Tabela no Supabase'}
+                        </button>
+                    </div>
 
-                    <div style={{ overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px', backgroundColor: 'white' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
+                    {saveError && <ErrorMessage message={saveError} />}
+                    {saveSuccess && <div style={{ color: '#2e7d32', backgroundColor: '#e8f5e9', padding: '10px 15px', borderRadius: '6px', marginBottom: '1rem', fontWeight: 'bold' }}>{saveSuccess}</div>}
+
+                    <div style={{ overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
                             <thead>
-                                <tr style={{ backgroundColor: 'var(--background-color)', borderBottom: '2px solid var(--border-color)' }}>
-                                    <th style={{ padding: '12px 15px' }}>Autor</th>
-                                    <th style={{ padding: '12px 15px' }}>Livro</th>
-                                    <th style={{ padding: '12px 15px' }}>Cap.</th>
-                                    <th style={{ padding: '12px 15px' }}>Vers.</th>
-                                    <th style={{ padding: '12px 15px', width: '50%' }}>Comentário</th>
-                                    <th style={{ padding: '12px 15px', textAlign: 'center' }}>Ações</th>
+                                <tr style={{ backgroundColor: '#ede7f6', borderBottom: '2px solid #b39ddb' }}>
+                                    <th style={{ padding: '10px 12px' }}>Autor</th>
+                                    <th style={{ padding: '10px 12px' }}>Livro</th>
+                                    <th style={{ padding: '10px 12px' }}>Cap.</th>
+                                    <th style={{ padding: '10px 12px' }}>Vers.</th>
+                                    <th style={{ padding: '10px 12px', width: '50%' }}>Comentário</th>
+                                    <th style={{ padding: '10px 12px', textAlign: 'center' }}>Ação</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {parsedCommentaries.map((item) => (
-                                    <tr key={item.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                                        <td style={{ padding: '10px 15px' }}>
-                                            <input 
-                                                type="text" 
-                                                value={item.author || ''} 
-                                                onChange={e => handleEditRow(item.id, 'author', e.target.value)}
-                                                style={{ width: '100px', padding: '4px', fontSize: '0.85rem' }} 
-                                            />
+                                    <tr key={item.id} style={{ borderBottom: '1px solid #ede7f6' }}>
+                                        <td style={{ padding: '8px 12px' }}>
+                                            <input type="text" value={item.author || ''} onChange={e => handleEditRow(item.id, 'author', e.target.value)} style={{ width: '100px', padding: '3px 5px', fontSize: '0.82rem' }} />
                                         </td>
-                                        <td style={{ padding: '10px 15px' }}>
-                                            <input 
-                                                type="text" 
-                                                value={item.book || ''} 
-                                                onChange={e => handleEditRow(item.id, 'book', e.target.value)}
-                                                style={{ width: '100px', padding: '4px', fontSize: '0.85rem' }} 
-                                            />
+                                        <td style={{ padding: '8px 12px' }}>
+                                            <input type="text" value={item.book || ''} onChange={e => handleEditRow(item.id, 'book', e.target.value)} style={{ width: '100px', padding: '3px 5px', fontSize: '0.82rem' }} />
                                         </td>
-                                        <td style={{ padding: '10px 15px' }}>
-                                            <input 
-                                                type="number" 
-                                                value={item.chapter || ''} 
-                                                onChange={e => handleEditRow(item.id, 'chapter', parseInt(e.target.value, 10))}
-                                                style={{ width: '50px', padding: '4px', fontSize: '0.85rem' }} 
-                                            />
+                                        <td style={{ padding: '8px 12px' }}>
+                                            <input type="number" value={item.chapter || ''} onChange={e => handleEditRow(item.id, 'chapter', parseInt(e.target.value, 10))} style={{ width: '48px', padding: '3px 5px', fontSize: '0.82rem' }} />
                                         </td>
-                                        <td style={{ padding: '10px 15px' }}>
-                                            <input 
-                                                type="text" 
-                                                value={item.verse === null || item.verse === undefined ? '' : item.verse} 
-                                                onChange={e => handleEditRow(item.id, 'verse', e.target.value === '' ? null : parseInt(e.target.value, 10))}
-                                                placeholder="Todo"
-                                                style={{ width: '50px', padding: '4px', fontSize: '0.85rem' }} 
-                                            />
+                                        <td style={{ padding: '8px 12px' }}>
+                                            <input type="text" value={item.verse === null || item.verse === undefined ? '' : item.verse} onChange={e => handleEditRow(item.id, 'verse', e.target.value === '' ? null : parseInt(e.target.value, 10))} placeholder="—" style={{ width: '44px', padding: '3px 5px', fontSize: '0.82rem' }} />
                                         </td>
-                                        <td style={{ padding: '10px 15px' }}>
-                                            <textarea 
-                                                value={item.text || ''} 
-                                                onChange={e => handleEditRow(item.id, 'text', e.target.value)}
-                                                style={{ width: '100%', minHeight: '60px', padding: '4px', fontSize: '0.85rem', resize: 'vertical' }} 
-                                            />
+                                        <td style={{ padding: '8px 12px' }}>
+                                            <textarea value={item.text || ''} onChange={e => handleEditRow(item.id, 'text', e.target.value)} style={{ width: '100%', minHeight: '56px', padding: '3px 5px', fontSize: '0.82rem', resize: 'vertical' }} />
                                         </td>
-                                        <td style={{ padding: '10px 15px', textAlign: 'center' }}>
-                                            <button 
-                                                onClick={() => handleDeleteRow(item.id)}
-                                                style={{ backgroundColor: '#d32f2f', color: 'white', padding: '4px 8px', fontSize: '0.8rem', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                                            >
+                                        <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+                                            <button onClick={() => handleDeleteRow(item.id)} style={{ backgroundColor: '#d32f2f', color: 'white', padding: '3px 8px', fontSize: '0.78rem', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
                                                 Excluir
                                             </button>
                                         </td>
@@ -1675,17 +1794,73 @@ Responda APENAS em JSON com um array de objetos, onde cada objeto tem exatamente
                             </tbody>
                         </table>
                     </div>
+                </div>
+            )}
 
-                    <button 
-                        onClick={handleSaveToSupabase} 
-                        disabled={saving} 
-                        className="full-width-button"
-                        style={{ marginTop: '1.5rem', backgroundColor: '#2e7d32' }}
-                        onMouseOver={e => e.currentTarget.style.backgroundColor = '#1b5e20'}
-                        onMouseOut={e => e.currentTarget.style.backgroundColor = '#2e7d32'}
-                    >
-                        {saving ? 'Gravando no Supabase...' : 'Confirmar e Gravar no Supabase'}
-                    </button>
+            {/* ===== MODAL ANEXAR ===== */}
+            {showAnexarModal && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+                    <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '2rem', width: '100%', maxWidth: '560px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                            <h3 style={{ margin: 0, color: '#1a237e' }}>📎 Anexar Comentário Manual</h3>
+                            <button onClick={() => setShowAnexarModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#555' }}>✕</button>
+                        </div>
+
+                        {formError && <ErrorMessage message={formError} />}
+                        {formSuccess && <div style={{ color: '#2e7d32', backgroundColor: '#e8f5e9', padding: '10px', borderRadius: '6px', marginBottom: '1rem', fontWeight: 'bold' }}>{formSuccess}</div>}
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            <div>
+                                <label style={sectionLabel}>Autor *</label>
+                                <input type="text" value={formAuthor} onChange={e => setFormAuthor(e.target.value)} placeholder="Ex: Spurgeon" style={{ width: '100%' }} />
+                            </div>
+                            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                                <div style={{ flexGrow: 1, minWidth: '150px' }}>
+                                    <label style={sectionLabel}>Livro *</label>
+                                    <select
+                                        value={formBook}
+                                        onChange={e => { setFormBook(e.target.value); setFormChapter(1); }}
+                                        style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '0.9rem' }}
+                                    >
+                                        {Object.entries(NAA_BOOKS).map(([testament, books]) => (
+                                            <optgroup key={testament} label={testament}>
+                                                {books.map(b => <option key={b.name} value={b.name}>{b.name}</option>)}
+                                            </optgroup>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div style={{ minWidth: '100px' }}>
+                                    <label style={sectionLabel}>Capítulo *</label>
+                                    <select
+                                        value={formChapter}
+                                        onChange={e => setFormChapter(parseInt(e.target.value, 10))}
+                                        style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '0.9rem' }}
+                                    >
+                                        {Array.from({ length: formBookChapters }, (_, i) => i + 1).map(n => (
+                                            <option key={n} value={n}>{n}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div style={{ minWidth: '100px' }}>
+                                    <label style={sectionLabel}>Versículo</label>
+                                    <input type="number" value={formVerse} onChange={e => setFormVerse(e.target.value)} placeholder="(deixe vazio = cap. todo)" style={{ width: '100%' }} min={1} />
+                                </div>
+                            </div>
+                            <div>
+                                <label style={sectionLabel}>Texto do Comentário *</label>
+                                <textarea value={formText} onChange={e => setFormText(e.target.value)} placeholder="Escreva ou cole o comentário bíblico aqui..." style={{ width: '100%', minHeight: '130px', resize: 'vertical' }} />
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+                            <button onClick={() => setShowAnexarModal(false)} style={{ flex: 1, padding: '12px', backgroundColor: '#e0e0e0', color: '#333', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>
+                                Cancelar
+                            </button>
+                            <button onClick={handleAnexarSave} disabled={formSaving} style={{ flex: 2, padding: '12px', backgroundColor: '#1565c0', color: 'white', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '1rem' }}>
+                                {formSaving ? 'Salvando...' : '💾 Salvar no Supabase'}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
@@ -1695,7 +1870,7 @@ Responda APENAS em JSON com um array de objetos, onde cada objeto tem exatamente
 
 // --- Main App Component ---
 const App = () => {
-    const TABS = ['NAA', 'Capítulo', 'Versículo', 'Pensamentos', 'Ilustrações', 'Construção', 'Chat', 'Importar'];
+    const TABS = ['NAA', 'Capítulo', 'Versículo', 'Pensamentos', 'Ilustrações', 'Construção', 'Chat', 'Importar Comentários'];
     const [activeTab, setActiveTab] = useState(TABS[0]);
     const [resetKey, setResetKey] = useState(0);
 
@@ -1724,12 +1899,12 @@ const App = () => {
         const handleThoughts = () => setActiveTab('Pensamentos');
         const handleIllustrations = () => setActiveTab('Ilustrações');
         const handleResetAll = () => setResetKey(prev => prev + 1);
-        
+
         window.addEventListener('analyze-verse', handleAnalyze);
         window.addEventListener('search-thoughts', handleThoughts);
         window.addEventListener('search-illustrations', handleIllustrations);
         window.addEventListener('reset-all', handleResetAll);
-        
+
         return () => {
             window.removeEventListener('analyze-verse', handleAnalyze);
             window.removeEventListener('search-thoughts', handleThoughts);
@@ -1738,12 +1913,17 @@ const App = () => {
         };
     }, []);
 
+    // Sync provider/model to global generateAIContent context via localStorage
+    useEffect(() => { localStorage.setItem('ai_provider', provider); }, [provider]);
+    useEffect(() => { localStorage.setItem('ollama_model', ollamaModel); }, [ollamaModel]);
+    useEffect(() => { localStorage.setItem('ollama_url', ollamaUrl); }, [ollamaUrl]);
+
     return (
         <div className="app-container">
             <header style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '5px' }}>
                 <h1 style={{ margin: 0, fontSize: '1.8rem', fontWeight: 'bold', letterSpacing: '0.5px' }}>TEXTOS REAVIVADOS</h1>
-                <button 
-                    onClick={() => setShowSettings(!showSettings)} 
+                <button
+                    onClick={() => setShowSettings(!showSettings)}
                     style={{
                         marginTop: '5px',
                         backgroundColor: 'rgba(255, 255, 255, 0.2)',
@@ -1779,8 +1959,8 @@ const App = () => {
                 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', minWidth: '160px' }}>
                         <label style={{ fontWeight: 'bold', fontSize: '0.8rem', color: '#0d47a1' }}>PROVEDOR DE IA:</label>
-                        <select 
-                            value={provider} 
+                        <select
+                            value={provider}
                             onChange={(e) => handleProviderChange(e.target.value)}
                             style={{ padding: '8px', borderRadius: '4px', border: '1px solid #90caf9', fontSize: '0.9rem', backgroundColor: 'white', cursor: 'pointer' }}
                         >
@@ -1793,9 +1973,9 @@ const App = () => {
                         <>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', flexGrow: 1, minWidth: '180px' }}>
                                 <label style={{ fontWeight: 'bold', fontSize: '0.8rem', color: '#0d47a1' }}>MODELO LOCAL (OLLAMA):</label>
-                                <input 
-                                    type="text" 
-                                    value={ollamaModel} 
+                                <input
+                                    type="text"
+                                    value={ollamaModel}
                                     onChange={(e) => handleModelChange(e.target.value)}
                                     placeholder="Ex: qwen2.5:14b ou llama3.1:8b"
                                     style={{ padding: '8px', borderRadius: '4px', border: '1px solid #90caf9', fontSize: '0.9rem', backgroundColor: 'white' }}
@@ -1803,9 +1983,9 @@ const App = () => {
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', flexGrow: 1, minWidth: '180px' }}>
                                 <label style={{ fontWeight: 'bold', fontSize: '0.8rem', color: '#0d47a1' }}>ENDEREÇO DO SERVER:</label>
-                                <input 
-                                    type="text" 
-                                    value={ollamaUrl} 
+                                <input
+                                    type="text"
+                                    value={ollamaUrl}
                                     onChange={(e) => handleUrlChange(e.target.value)}
                                     placeholder="Ex: http://localhost:11434"
                                     style={{ padding: '8px', borderRadius: '4px', border: '1px solid #90caf9', fontSize: '0.9rem', backgroundColor: 'white' }}
@@ -1835,7 +2015,7 @@ const App = () => {
                 <div style={{ display: activeTab === 'Ilustrações' ? 'block' : 'none' }}><IlustracoesView key={`ilustracoes-${resetKey}`} /></div>
                 <div style={{ display: activeTab === 'Construção' ? 'block' : 'none' }}><ConstrucaoView key={`construcao-${resetKey}`} /></div>
                 <div style={{ display: activeTab === 'Chat' ? 'block' : 'none' }}><ChatView key={`chat-${resetKey}`} /></div>
-                <div style={{ display: activeTab === 'Importar' ? 'block' : 'none' }}><ImportarView key={`importar-${resetKey}`} /></div>
+                <div style={{ display: activeTab === 'Importar Comentários' ? 'block' : 'none' }}><ImportarView key={`importar-${resetKey}`} /></div>
             </main>
         </div>
     );
@@ -1847,3 +2027,12 @@ if (container) {
     const root = createRoot(container);
     root.render(<App />);
 }
+
+
+
+
+
+
+
+
+
