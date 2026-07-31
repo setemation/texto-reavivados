@@ -2,6 +2,7 @@ import React, { useState, useCallback, Fragment, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { GoogleGenAI, Type } from "@google/genai";
 import { supabase, isSupabaseConfigured } from './supabase';
+import logoImg from './logo.jpg';
 
 // --- Helper Components ---
 const LoadingSpinner = () => <div className="loading-container"><div className="loader"></div></div>;
@@ -1178,12 +1179,15 @@ const App = () => {
 
     return (
         <div className="app-container">
-            <header style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                <h1 style={{ margin: 0 }}>REDATOR REAVIVADOS 2.0</h1>
+            <header style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <img src={logoImg} alt="Logo" style={{ width: '40px', height: '40px', borderRadius: '8px', border: '2px solid white', boxShadow: '0 2px 5px rgba(0,0,0,0.2)' }} />
+                    <h1 style={{ margin: 0, fontSize: '1.8rem', fontWeight: 'bold', letterSpacing: '0.5px' }}>TEXTOS REAVIVADOS</h1>
+                </div>
                 <button 
                     onClick={() => setShowSettings(!showSettings)} 
                     style={{
-                        marginTop: '10px',
+                        marginTop: '5px',
                         backgroundColor: 'rgba(255, 255, 255, 0.2)',
                         border: 'none',
                         color: 'white',
