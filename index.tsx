@@ -34,6 +34,31 @@ const formatGeminiError = (e: any, defaultMessage: string): string => {
     return `${defaultMessage} (Detalhes: ${msg})`;
 };
 
+const parseAIJsonArray = (jsonStr: string): any[] => {
+    let cleanStr = jsonStr.trim();
+    if (cleanStr.startsWith('```json')) {
+        cleanStr = cleanStr.substring(7);
+    }
+    if (cleanStr.endsWith('```')) {
+        cleanStr = cleanStr.substring(0, cleanStr.length - 3);
+    }
+    cleanStr = cleanStr.trim();
+
+    const parsed = JSON.parse(cleanStr);
+    if (Array.isArray(parsed)) {
+        return parsed;
+    }
+    
+    if (typeof parsed === 'object' && parsed !== null) {
+        for (const key of Object.keys(parsed)) {
+            if (Array.isArray(parsed[key])) {
+                return parsed[key];
+            }
+        }
+    }
+    throw new Error("O JSON retornado não é um array e não contém nenhuma lista.");
+};
+
 // --- API Wrapper ---
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
@@ -598,7 +623,7 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
                     }
                 }
             });
-            const analysisResult = JSON.parse(responseText);
+            const analysisResult = parseAIJsonArray(responseText);
             setDeepAnalysisState(prev => ({ ...prev, [index]: { loading: false, result: analysisResult } }));
         } catch (e) {
             setDeepAnalysisState(prev => ({ ...prev, [index]: { loading: false, error: formatGeminiError(e, 'Falha ao realizar análise profunda.') } }));
@@ -833,7 +858,7 @@ const PensamentosView = () => {
                     responseSchema: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { quote: { type: Type.STRING }, source: { type: Type.STRING } } } }
                 }
             });
-            const newQuotes = JSON.parse(responseText).map((q: any) => ({ ...q, id: Math.random().toString(36) }));
+            const newQuotes = parseAIJsonArray(responseText).map((q: any) => ({ ...q, id: Math.random().toString(36) }));
             setQuotes(prev => more ? [...prev, ...newQuotes] : newQuotes);
         } catch (e) {
             setError(formatGeminiError(e, 'Falha ao buscar pensamentos.'));
@@ -913,7 +938,7 @@ const IlustracoesView = () => {
                     responseSchema: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { resumo: { type: Type.STRING }, fonte: { type: Type.STRING } } } }
                 }
             });
-            const newItems = JSON.parse(responseText).map((item: any) => ({ ...item, id: Math.random().toString(36), category }));
+            const newItems = parseAIJsonArray(responseText).map((item: any) => ({ ...item, id: Math.random().toString(36), category }));
             setIllustrations(prev => [...prev, ...newItems]);
         } catch (e) {
             setError(formatGeminiError(e, 'Falha ao buscar ilustrações.'));
