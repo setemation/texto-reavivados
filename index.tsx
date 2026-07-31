@@ -24,11 +24,14 @@ const parseBold = (text = '') => {
 
 const formatGeminiError = (e: any, defaultMessage: string): string => {
     console.error(e);
-    const msg = e?.message || '';
+    const msg = e?.message || e?.toString() || '';
     if (msg.includes('spending cap') || msg.includes('RESOURCE_EXHAUSTED') || e?.status === 429 || msg.includes('429')) {
         return 'Limite de cota excedido no Google AI Studio (Erro 429). Acesse https://ai.studio/spend para ajustar seu limite de gastos ou insira uma nova API Key.';
     }
-    return defaultMessage;
+    if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('TypeError') || msg.includes('network error')) {
+        return 'Erro de Conexão: Não foi possível conectar ao Ollama local. Certifique-se de que o Ollama está rodando no seu computador e que as permissões CORS foram ativadas (com a variável OLLAMA_ORIGINS="*").';
+    }
+    return `${defaultMessage} (Detalhes: ${msg})`;
 };
 
 // --- API Wrapper ---
