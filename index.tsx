@@ -1618,7 +1618,7 @@ Responda APENAS em JSON com um array de objetos com as chaves: "author", "book",
 
     return (
         <div className="tab-content">
-            <h2>Importar Comentários</h2>
+            <h2>Obras</h2>
 
             {/* ===== NAVEGADOR ===== */}
             <div style={panelStyle}>
@@ -1870,7 +1870,7 @@ Responda APENAS em JSON com um array de objetos com as chaves: "author", "book",
 
 // --- Main App Component ---
 const App = () => {
-    const TABS = ['NAA', 'Capítulo', 'Versículo', 'Pensamentos', 'Ilustrações', 'Construção', 'Chat', 'Importar Comentários'];
+    const TABS = ['NAA', 'Capítulo', 'Versículo', 'Pensamentos', 'Ilustrações', 'Construção', 'Chat', 'Obras'];
     const [activeTab, setActiveTab] = useState(TABS[0]);
     const [resetKey, setResetKey] = useState(0);
 
@@ -2015,7 +2015,7 @@ const App = () => {
                 <div style={{ display: activeTab === 'Ilustrações' ? 'block' : 'none' }}><IlustracoesView key={`ilustracoes-${resetKey}`} /></div>
                 <div style={{ display: activeTab === 'Construção' ? 'block' : 'none' }}><ConstrucaoView key={`construcao-${resetKey}`} /></div>
                 <div style={{ display: activeTab === 'Chat' ? 'block' : 'none' }}><ChatView key={`chat-${resetKey}`} /></div>
-                <div style={{ display: activeTab === 'Importar Comentários' ? 'block' : 'none' }}><ImportarView key={`importar-${resetKey}`} /></div>
+                <div style={{ display: activeTab === 'Obras' ? 'block' : 'none' }}><ImportarView key={`importar-${resetKey}`} /></div>
             </main>
         </div>
     );
