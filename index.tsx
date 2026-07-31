@@ -941,13 +941,18 @@ const IlustracoesView = () => {
     const [checkState, setCheckState] = useState({});
     const [expandState, setExpandState] = useState({});
 
-    const handleSearch = useCallback(async (category = 'notícias', customTheme = null) => {
+    const handleSearch = useCallback(async (category = 'notícias', customTheme = null, append = false) => {
         const query = customTheme || theme;
         if (!query) return;
         if (customTheme) setTheme(customTheme);
         setLoading(true);
         setError('');
-        if (category === 'notícias' && illustrations.length === 0) setIllustrations([]);
+        
+        if (!append) {
+            setIllustrations([]);
+            setCheckState({});
+            setExpandState({});
+        }
 
         const promptMap = {
             'notícias': `Encontre 3 notícias reais que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos e a fonte (tente incluir uma URL direta se disponível).`,
@@ -964,13 +969,13 @@ const IlustracoesView = () => {
                 }
             });
             const newItems = parseAIJsonArray(responseText).map((item: any) => ({ ...item, id: Math.random().toString(36), category }));
-            setIllustrations(prev => [...prev, ...newItems]);
+            setIllustrations(prev => append ? [...prev, ...newItems] : newItems);
         } catch (e) {
             setError(formatGeminiError(e, 'Falha ao buscar ilustrações.'));
         } finally {
             setLoading(false);
         }
-    }, [theme, illustrations]);
+    }, [theme]);
 
     const handleCheck = async (id, item) => {
         setCheckState(prev => ({ ...prev, [id]: { loading: true } }));
@@ -1000,7 +1005,7 @@ Gere exatamente mais TRÊS parágrafos detalhados ampliando essa ilustração, c
     useEffect(() => {
         const handler = (e) => {
             if (e.detail) {
-                handleSearch('notícias', e.detail);
+                handleSearch('notícias', e.detail, false);
             }
         };
         window.addEventListener('search-illustrations', handler);
@@ -1011,8 +1016,8 @@ Gere exatamente mais TRÊS parágrafos detalhados ampliando essa ilustração, c
         <div className="tab-content">
             <h2>Busca de Ilustrações</h2>
             <div className="form-group">
-                <input type="text" value={theme} onChange={e => setTheme(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch('notícias')} placeholder="Ex: Perdão, Fé" />
-                <button onClick={() => handleSearch('notícias')} disabled={loading}>{loading ? 'Buscando...' : 'Buscar'}</button>
+                <input type="text" value={theme} onChange={e => setTheme(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch('notícias', null, false)} placeholder="Ex: Perdão, Fé" />
+                <button onClick={() => handleSearch('notícias', null, false)} disabled={loading}>{loading ? 'Buscando...' : 'Buscar'}</button>
             </div>
             {loading && !illustrations.length && <LoadingSpinner />}
             {error && <ErrorMessage message={error} />}
@@ -1045,9 +1050,9 @@ Gere exatamente mais TRÊS parágrafos detalhados ampliando essa ilustração, c
             ))}
             {illustrations.length > 0 && (
                 <div className="more-buttons">
-                    <button onClick={() => handleSearch('notícias')} disabled={loading}>+ Notícias</button>
-                    <button onClick={() => handleSearch('estudos')} disabled={loading}>+ Estudos</button>
-                    <button onClick={() => handleSearch('histórias')} disabled={loading}>+ Histórias</button>
+                    <button onClick={() => handleSearch('notícias', null, true)} disabled={loading}>+ Notícias</button>
+                    <button onClick={() => handleSearch('estudos', null, true)} disabled={loading}>+ Estudos</button>
+                    <button onClick={() => handleSearch('histórias', null, true)} disabled={loading}>+ Histórias</button>
                 </div>
             )}
         </div>
