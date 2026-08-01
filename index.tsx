@@ -497,6 +497,33 @@ const CapituloView = () => {
             const commentaries = await fetchCommentaries(ref);
             setUsedCommentaries(commentaries);
 
+            const currentProvider = localStorage.getItem('ai_provider') || 'ollama';
+
+            if (currentProvider === 'supabase') {
+                const chapterText = await getBibleTextFromRef(ref);
+                const temas = commentaries.length > 0
+                    ? commentaries.map(c => ({
+                        titulo: `Comentário de ${c.author}${c.verse ? ` (Versículo ${c.verse})` : ' (Capítulo)'}`,
+                        explicacao: c.text,
+                        versiculos: c.verse ? `${c.verse}` : 'Capítulo inteiro',
+                        versiculosTexto: null
+                    }))
+                    : [{
+                        titulo: `Capítulo ${ref} (Sem comentários cadastrados)`,
+                        explicacao: 'Nenhum comentário cadastrado no Supabase para este capítulo. Use a aba Obras para anexar ou escanear comentários.',
+                        versiculos: '—',
+                        versiculosTexto: null
+                    }];
+
+                setResult({
+                    sinteseCapitulo: chapterText && !chapterText.startsWith('Capítulo não encontrado')
+                        ? `[Busca Direta Supabase - Sem IA]\n\nTexto Bíblico de ${ref}:\n${chapterText}`
+                        : `[Busca Direta Supabase - Sem IA]\n\nForam encontrados ${commentaries.length} comentário(s) no banco de dados para ${ref}.`,
+                    temasImportantes: temas
+                });
+                return;
+            }
+
             let prompt = `Faça uma análise aprofundada do capítulo ${ref}. Forneça uma síntese do capítulo e identifique os temas mais importantes com seus versículos chave. ${existingTitles}`;
             
             if (commentaries.length > 0) {
@@ -693,6 +720,28 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
 
             const commentaries = await fetchCommentaries(targetRef);
             setUsedCommentaries(commentaries);
+
+            const currentProvider = localStorage.getItem('ai_provider') || 'ollama';
+            if (currentProvider === 'supabase') {
+                const apresentacao = vText && !vText.startsWith("Capítulo não encontrado")
+                    ? `[Busca Direta Supabase - Sem IA]\n\nTexto do Versículo ${targetRef}:\n${vText}`
+                    : `[Busca Direta Supabase - Sem IA]\n\nConsulta realizada diretamente no banco Supabase para ${targetRef}.`;
+
+                const histCult = commentaries.length > 0
+                    ? commentaries.map(c => `👤 Comentário de ${c.author}${c.verse ? ` (Versículo ${c.verse})` : ' (Capítulo)'}:\n${c.text}`).join('\n\n')
+                    : 'Nenhum comentário cadastrado para este versículo no banco de dados Supabase.';
+
+                setResult({
+                    apresentacaoCapitulo: apresentacao,
+                    analiseHistoricoCultural: histCult,
+                    analiseTeologica: `Consulta direta realizada no banco de dados Supabase para a passagem ${targetRef}. Total de comentários encontrados: ${commentaries.length}.`,
+                    aplicacoes: commentaries.length > 0
+                        ? commentaries.map(c => `**Comentário (${c.author}):** ${c.text}`)
+                        : ['Nenhum comentário disponível no banco para gerar aplicações.'],
+                    analiseLinguistica: []
+                });
+                return;
+            }
 
             let prompt = `Faça uma exegese detalhada de ${targetRef}. Siga estas instruções estritas para cada seção:
 
@@ -1017,10 +1066,12 @@ const IlustracoesView = () => {
             setExpandState({});
         }
 
-        const promptMap = {
+        const promptMap: Record<string, string> = {
             'notícias': `Encontre 3 notícias reais que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos e a fonte (tente incluir uma URL direta se disponível).`,
             'estudos': `Encontre 2 estudos científicos ou acadêmicos que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos e a fonte (tente incluir uma URL direta se disponível).`,
-            'histórias': `Encontre 2 enredos de filmes ou livros que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos e a fonte (tente incluir uma URL direta se disponível).`
+            'histórias': `Encontre 2 enredos de filmes ou livros reais que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos e a fonte (tente incluir uma URL direta se disponível).`,
+            'literatura': `Encontre 2 obras de ficção (literatura, romances, contos ou revistas em quadrinhos) que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos e a fonte.`,
+            'arte': `Encontre 2 obras de arte (quadros, músicas, pinturas, esculturas ou outras manifestações artísticas) que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos e a fonte.`
         };
         try {
             const responseText = await generateAIContent({
@@ -1116,6 +1167,8 @@ Gere exatamente mais TRÊS parágrafos detalhados ampliando essa ilustração, c
                     <button onClick={() => handleSearch('notícias', null, true)} disabled={loading}>+ Notícias</button>
                     <button onClick={() => handleSearch('estudos', null, true)} disabled={loading}>+ Estudos</button>
                     <button onClick={() => handleSearch('histórias', null, true)} disabled={loading}>+ Histórias</button>
+                    <button onClick={() => handleSearch('literatura', null, true)} disabled={loading}>+ Literatura</button>
+                    <button onClick={() => handleSearch('arte', null, true)} disabled={loading}>+ Arte</button>
                 </div>
             )}
         </div>
@@ -1433,7 +1486,9 @@ const ImportarView = () => {
     // --- Browser State ---
     const [browseBook, setBrowseBook] = useState<any>(null);
     const [browseChapter, setBrowseChapter] = useState<number | null>(null);
+    const [browseVerse, setBrowseVerse] = useState<number | null>(null);
     const [browseCommentaries, setBrowseCommentaries] = useState<any[]>([]);
+    const [openCommentaryId, setOpenCommentaryId] = useState<Record<string, boolean>>({});
     const [browseLoading, setBrowseLoading] = useState(false);
     const [browseError, setBrowseError] = useState('');
 
@@ -1459,18 +1514,24 @@ const ImportarView = () => {
     const [saveSuccess, setSaveSuccess] = useState('');
 
     // --- Browse Logic ---
-    const loadBrowseCommentaries = async (book: any, chapter: number) => {
+    const loadBrowseCommentaries = async (book: any, chapter: number, verse: number | null = browseVerse) => {
         if (!isSupabaseConfigured()) { setBrowseError('Supabase não configurado.'); return; }
         setBrowseLoading(true);
         setBrowseError('');
         setBrowseCommentaries([]);
+        setOpenCommentaryId({});
         try {
-            const { data, error } = await supabase
+            let query = supabase
                 .from('commentaries')
                 .select('*')
                 .eq('book', book.name)
-                .eq('chapter', chapter)
-                .order('verse', { ascending: true });
+                .eq('chapter', chapter);
+
+            if (verse !== null) {
+                query = query.eq('verse', verse);
+            }
+
+            const { data, error } = await query.order('verse', { ascending: true, nullsFirst: true });
             if (error) throw error;
             setBrowseCommentaries(data || []);
         } catch (e: any) {
@@ -1483,13 +1544,22 @@ const ImportarView = () => {
     const handleBrowseBook = (book: any) => {
         setBrowseBook(book);
         setBrowseChapter(null);
+        setBrowseVerse(null);
         setBrowseCommentaries([]);
         setBrowseError('');
     };
 
     const handleBrowseChapter = (ch: number) => {
         setBrowseChapter(ch);
-        if (browseBook) loadBrowseCommentaries(browseBook, ch);
+        setBrowseVerse(null);
+        if (browseBook) loadBrowseCommentaries(browseBook, ch, null);
+    };
+
+    const handleBrowseVerse = (v: number | null) => {
+        setBrowseVerse(v);
+        if (browseBook && browseChapter) {
+            loadBrowseCommentaries(browseBook, browseChapter, v);
+        }
     };
 
     // --- Anexar Modal Logic ---
@@ -1687,6 +1757,23 @@ Responda APENAS em JSON com um array de objetos com as chaves: "author", "book",
                             ))}
                         </select>
                     </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flexGrow: 1, minWidth: '150px' }}>
+                        <label style={sectionLabel}>Versículo (Opcional)</label>
+                        <select
+                            value={browseVerse ?? ''}
+                            onChange={e => {
+                                const val = e.target.value === '' ? null : parseInt(e.target.value, 10);
+                                handleBrowseVerse(val);
+                            }}
+                            disabled={!browseChapter}
+                            style={{ padding: '8px', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '0.9rem' }}
+                        >
+                            <option value="">— Todos (Capítulo) —</option>
+                            {Array.from({ length: 176 }, (_, i) => i + 1).map(n => (
+                                <option key={n} value={n}>Versículo {n}</option>
+                            ))}
+                        </select>
+                    </div>
                 </div>
 
                 {browseLoading && <LoadingSpinner />}
@@ -1695,27 +1782,74 @@ Responda APENAS em JSON com um array de objetos com as chaves: "author", "book",
                 {browseChapter && !browseLoading && (
                     browseCommentaries.length === 0 ? (
                         <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-light)', backgroundColor: '#f5f5f5', borderRadius: '8px' }}>
-                            Nenhum comentário encontrado para <strong>{browseBook?.name} {browseChapter}</strong>.<br />
+                            Nenhum comentário encontrado para <strong>{browseBook?.name} {browseChapter}{browseVerse ? `:${browseVerse}` : ''}</strong>.<br />
                             <span style={{ fontSize: '0.85rem' }}>Use o botão <em>Anexar</em> ou <em>Escanear</em> abaixo para adicionar comentários.</span>
                         </div>
                     ) : (
                         <div>
                             <p style={{ fontSize: '0.85rem', color: 'var(--text-light)', marginBottom: '0.75rem' }}>
-                                <strong>{browseCommentaries.length}</strong> comentário(s) encontrado(s) para <strong>{browseBook?.name} {browseChapter}</strong>:
+                                <strong>{browseCommentaries.length}</strong> comentário(s) encontrado(s) para <strong>{browseBook?.name} {browseChapter}{browseVerse ? `:${browseVerse}` : ''}</strong> (clique em um comentário para abrir):
                             </p>
-                            {browseCommentaries.map((c, i) => (
-                                <div key={c.id || i} style={{ borderLeft: '4px solid #1565c0', backgroundColor: '#e3f2fd', padding: '12px 15px', borderRadius: '0 8px 8px 0', marginBottom: '0.75rem' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', flexWrap: 'wrap', gap: '4px' }}>
-                                        <span style={{ fontWeight: 'bold', fontSize: '0.85rem', color: '#0d47a1' }}>
-                                            {c.author}
-                                        </span>
-                                        <span style={{ fontSize: '0.8rem', color: '#546e7a', backgroundColor: 'white', padding: '2px 8px', borderRadius: '12px', border: '1px solid #b0bec5' }}>
-                                            {c.verse ? `Versículo ${c.verse}` : 'Capítulo inteiro'}
-                                        </span>
+                            {browseCommentaries.map((c, i) => {
+                                const itemKey = c.id || `comm-${i}`;
+                                const isOpen = !!openCommentaryId[itemKey];
+                                return (
+                                    <div
+                                        key={itemKey}
+                                        style={{
+                                            borderLeft: '4px solid #1565c0',
+                                            backgroundColor: '#e3f2fd',
+                                            borderRadius: '8px',
+                                            marginBottom: '0.75rem',
+                                            overflow: 'hidden',
+                                            boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+                                        }}
+                                    >
+                                        <div
+                                            onClick={() => setOpenCommentaryId(prev => ({ ...prev, [itemKey]: !prev[itemKey] }))}
+                                            style={{
+                                                padding: '12px 15px',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                justify: 'space-between',
+                                                alignItems: 'center',
+                                                backgroundColor: isOpen ? '#bbdefb' : '#e3f2fd',
+                                                transition: 'background-color 0.2s',
+                                                userSelect: 'none'
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                                                <span style={{ fontWeight: 'bold', fontSize: '0.92rem', color: '#0d47a1' }}>
+                                                    👤 {c.author}
+                                                </span>
+                                                <span style={{ fontSize: '0.8rem', color: '#546e7a', backgroundColor: 'white', padding: '2px 8px', borderRadius: '12px', border: '1px solid #b0bec5' }}>
+                                                    {c.verse ? `Versículo ${c.verse}` : 'Capítulo inteiro'}
+                                                </span>
+                                            </div>
+                                            <span style={{ fontSize: '0.85rem', color: '#0d47a1', fontWeight: 'bold' }}>
+                                                {isOpen ? '▲ Ocultar' : '▼ Ver Comentário'}
+                                            </span>
+                                        </div>
+
+                                        {isOpen && (
+                                            <div style={{ padding: '15px', backgroundColor: 'white', borderTop: '1px solid #90caf9' }}>
+                                                <p style={{ margin: 0, fontSize: '0.92rem', lineHeight: '1.6', color: '#212121', whitespace: 'pre-wrap' }}>{c.text}</p>
+                                                <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'flex-end' }}>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleAddClick(e, 'add-construction', `Comentário de ${c.author} (${browseBook?.name} ${browseChapter}${c.verse ? ':' + c.verse : ''}):\n${c.text}`);
+                                                        }}
+                                                        style={{ fontSize: '0.82rem', padding: '6px 12px', backgroundColor: '#1565c0', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                                    >
+                                                        Adicionar na Construção
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                    <p style={{ margin: 0, fontSize: '0.9rem', lineHeight: '1.6', color: '#212121' }}>{c.text}</p>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     )
                 )}
@@ -1999,7 +2133,7 @@ const App = () => {
                     onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.3)'}
                     onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.2)'}
                 >
-                    ⚙️ Provedor: {provider === 'gemini' ? 'Gemini (Nuvem)' : `Ollama (${ollamaModel})`}
+                    ⚙️ Provedor: {provider === 'gemini' ? 'Gemini (Nuvem)' : provider === 'supabase' ? 'Supabase (Sem IA)' : `Ollama (${ollamaModel})`}
                 </button>
             </header>
 
@@ -2023,6 +2157,7 @@ const App = () => {
                         >
                             <option value="gemini">Gemini (Nuvem)</option>
                             <option value="ollama">Ollama (Local)</option>
+                            <option value="supabase">Supabase (Sem IA)</option>
                         </select>
                     </div>
 
