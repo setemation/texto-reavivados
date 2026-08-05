@@ -509,9 +509,6 @@ const BibliaView = () => {
             
             {!selectedBook && (
                 <div>
-                    <h2 style={{ margin: 0, paddingBottom: '1.5rem', color: '#2b569a', fontSize: '1.85rem', fontWeight: 700, border: 'none' }}>
-                        Livros da Bíblia
-                    </h2>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem', alignItems: 'start' }}>
                         {Object.entries(BIBLIA_STRUCTURE).map(([testamentName, { col1, col2 }]) => (
                             <div key={testamentName} style={{ backgroundColor: '#ffffff', border: '1px solid #e1eaf5', borderRadius: '16px', padding: '1.5rem 1.75rem', boxShadow: '0 4px 14px rgba(43, 86, 154, 0.04)' }}>
@@ -2300,7 +2297,7 @@ Responda APENAS em JSON com um array de objetos com as chaves: "author", "book",
 
 // --- Main App Component ---
 const App = () => {
-    const TABS = ['BÍBLIA', 'Capítulo', 'Versículo', 'Pensamentos', 'Ilustrações', 'Construção', 'Chat', 'Obras'];
+    const TABS = ['Bíblia', 'Capítulo', 'Versículo', 'Pensamentos', 'Ilustrações', 'Construção', 'Chat', 'Obras'];
     const [activeTab, setActiveTab] = useState(TABS[0]);
     const [resetKey, setResetKey] = useState(0);
 
@@ -2444,7 +2441,7 @@ const App = () => {
                 ))}
             </nav>
             <main>
-                <div style={{ display: activeTab === 'BÍBLIA' ? 'block' : 'none' }}><BibliaView key={`biblia-${resetKey}`} /></div>
+                <div style={{ display: activeTab === 'Bíblia' ? 'block' : 'none' }}><BibliaView key={`biblia-${resetKey}`} /></div>
                 <div style={{ display: activeTab === 'Capítulo' ? 'block' : 'none' }}><CapituloView /></div>
                 <div style={{ display: activeTab === 'Versículo' ? 'block' : 'none' }}><VersiculoView key={`versiculo-${resetKey}`} /></div>
                 <div style={{ display: activeTab === 'Pensamentos' ? 'block' : 'none' }}><PensamentosView key={`pensamentos-${resetKey}`} /></div>
