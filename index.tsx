@@ -58,6 +58,64 @@ const parseAIJsonArray = (jsonStr: string): any[] => {
     throw new Error("O JSON retornado não é um array e não contém nenhuma lista.");
 };
 
+// --- Ollama Launcher Button ---
+const OllamaStartButton = () => {
+    const [status, setStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
+    const [msg, setMsg] = useState('');
+
+    const handleStart = async () => {
+        setStatus('loading');
+        setMsg('');
+        try {
+            const res = await fetch('/api/start-ollama', { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                setStatus('ok');
+                setMsg(data.message || 'Ollama iniciado!');
+            } else {
+                setStatus('error');
+                setMsg(data.error || 'Erro ao iniciar Ollama.');
+            }
+        } catch (e) {
+            setStatus('error');
+            setMsg('Não foi possível contatar o servidor.');
+        }
+        setTimeout(() => setStatus('idle'), 4000);
+    };
+
+    const colors: Record<string, string> = { idle: '#1565c0', loading: '#757575', ok: '#2e7d32', error: '#c62828' };
+
+    return (
+        <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+            <button
+                onClick={handleStart}
+                disabled={status === 'loading'}
+                title="Iniciar Ollama com CORS habilitado"
+                style={{
+                    background: 'none', border: 'none', cursor: status === 'loading' ? 'wait' : 'pointer',
+                    fontSize: '16px', padding: '2px 4px', color: colors[status], lineHeight: 1,
+                    transition: 'transform 0.3s',
+                    animation: status === 'loading' ? 'spin 1s linear infinite' : 'none'
+                }}
+            >
+                ⚙️
+            </button>
+            {msg && (
+                <span style={{
+                    position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
+                    backgroundColor: status === 'ok' ? '#e8f5e9' : '#ffebee',
+                    color: status === 'ok' ? '#2e7d32' : '#c62828',
+                    border: `1px solid ${status === 'ok' ? '#a5d6a7' : '#ef9a9a'}`,
+                    borderRadius: '4px', padding: '4px 8px', fontSize: '0.7rem',
+                    whiteSpace: 'nowrap', zIndex: 100, marginTop: '4px', boxShadow: '0 2px 6px rgba(0,0,0,0.15)'
+                }}>
+                    {msg}
+                </span>
+            )}
+        </span>
+    );
+};
+
 // --- API Wrapper ---
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
@@ -112,12 +170,29 @@ const fetchBibleTextLocal = async () => {
     }
 };
 
+// Normalize book names to match naa.md format (e.g., "Salmos" -> "Salmo")
+const normalizeBookName = (book: string): string => {
+    const map: Record<string, string> = {
+        'salmos': 'Salmo',
+        'cantares': 'Cântico',
+        'cântico dos cânticos': 'Cântico',
+        'cânticos': 'Cântico',
+        'sabedoria': 'Sabedoria de Salomão',
+    };
+    const lower = book.toLowerCase().trim();
+    if (map[lower]) return map[lower];
+    // Remove trailing 's' for plural forms if needed (e.g. "Salmos" -> "Salmo")
+    // Already handled above for known cases
+    return book;
+};
+
 const extractVersesFromRefLocal = (bibleText: string, ref: string, defaultVersesStr = '') => {
     const match = ref.match(/^(.+?)\s+(\d+):?(.*)$/);
     if (!match) return "Referência inválida.";
 
     let book = match[1].trim();
     book = book.replace(/^(\d)\s+/, '$1');
+    book = normalizeBookName(book);
     const chapter = match[2];
     
     let versesStr = (defaultVersesStr || match[3] || '').trim();
@@ -190,6 +265,7 @@ const getBibleTextFromRef = async (ref: string, defaultVersesStr = ''): Promise<
 
     let book = match[1].trim();
     book = book.replace(/^(\d)\s+/, '$1');
+    book = normalizeBookName(book);
     const chapter = parseInt(match[2], 10);
     
     let versesStr = (defaultVersesStr || match[3] || '').trim();
@@ -284,40 +360,100 @@ const fetchCommentaries = async (refStr: string): Promise<any[]> => {
 
 // --- Tab Content Components ---
 
-// --- NAA Helper Data ---
+// --- Helper Data for BÍBLIA ---
+const BIBLIA_STRUCTURE = {
+    "Antigo Testamento": {
+        col1: [
+            { name: "Gênesis", chapters: 50 },
+            { name: "Êxodo", chapters: 40 },
+            { name: "Levítico", chapters: 27 },
+            { name: "Números", chapters: 36 },
+            { name: "Deuteronômio", chapters: 34 },
+            { name: "Josué", chapters: 24 },
+            { name: "Juízes", chapters: 21 },
+            { name: "Rute", chapters: 4 },
+            { name: "1 Samuel", map: "1Samuel", chapters: 31 },
+            { name: "2 Samuel", map: "2Samuel", chapters: 24 },
+            { name: "1 Reis", map: "1Reis", chapters: 22 },
+            { name: "2 Reis", map: "2Reis", chapters: 25 },
+            { name: "1 Crônicas", map: "1Crônicas", chapters: 29 },
+            { name: "2 Crônicas", map: "2Crônicas", chapters: 36 },
+            { name: "Esdras", chapters: 10 },
+            { name: "Neemias", chapters: 13 },
+            { name: "Ester", chapters: 10 },
+            { name: "Jó", chapters: 42 },
+            { name: "Salmos", map: "Salmo", chapters: 150 },
+            { name: "Provérbios", chapters: 31 }
+        ],
+        col2: [
+            { name: "Eclesiastes", chapters: 12 },
+            { name: "Cânticos", map: "Cântico", chapters: 8 },
+            { name: "Isaías", chapters: 66 },
+            { name: "Jeremias", chapters: 52 },
+            { name: "Lamentações", chapters: 5 },
+            { name: "Ezequiel", chapters: 48 },
+            { name: "Daniel", chapters: 12 },
+            { name: "Oséias", map: "Oseias", chapters: 14 },
+            { name: "Joel", chapters: 3 },
+            { name: "Amós", chapters: 9 },
+            { name: "Obadias", chapters: 1 },
+            { name: "Jonas", chapters: 4 },
+            { name: "Miquéias", map: "Miqueias", chapters: 7 },
+            { name: "Naum", chapters: 3 },
+            { name: "Habacuque", chapters: 3 },
+            { name: "Sofonias", chapters: 3 },
+            { name: "Ageu", chapters: 2 },
+            { name: "Zacarias", chapters: 14 },
+            { name: "Malaquias", chapters: 4 }
+        ]
+    },
+    "Novo Testamento": {
+        col1: [
+            { name: "Mateus", chapters: 28 },
+            { name: "Marcos", chapters: 16 },
+            { name: "Lucas", chapters: 24 },
+            { name: "João", chapters: 21 },
+            { name: "Atos", chapters: 28 },
+            { name: "Romanos", chapters: 16 },
+            { name: "1 Coríntios", map: "1Coríntios", chapters: 16 },
+            { name: "2 Coríntios", map: "2Coríntios", chapters: 13 },
+            { name: "Gálatas", chapters: 6 },
+            { name: "Efésios", chapters: 6 },
+            { name: "Filipenses", chapters: 4 },
+            { name: "Colossenses", chapters: 4 },
+            { name: "1 Tessalonicenses", map: "1Tessalonicenses", chapters: 5 },
+            { name: "2 Tessalonicenses", map: "2Tessalonicenses", chapters: 3 }
+        ],
+        col2: [
+            { name: "1 Timóteo", map: "1Timóteo", chapters: 6 },
+            { name: "2 Timóteo", map: "2Timóteo", chapters: 4 },
+            { name: "Tito", chapters: 3 },
+            { name: "Filemom", chapters: 1 },
+            { name: "Hebreus", chapters: 13 },
+            { name: "Tiago", chapters: 5 },
+            { name: "1 Pedro", map: "1Pedro", chapters: 5 },
+            { name: "2 Pedro", map: "2Pedro", chapters: 3 },
+            { name: "1 João", map: "1João", chapters: 5 },
+            { name: "2 João", map: "2João", chapters: 1 },
+            { name: "3 João", map: "3João", chapters: 1 },
+            { name: "Judas", chapters: 1 },
+            { name: "Apocalipse", chapters: 22 }
+        ]
+    }
+};
+
 const NAA_BOOKS = {
     "Antigo Testamento": [
-        { name: "Gênesis", chapters: 50 }, { name: "Êxodo", chapters: 40 }, { name: "Levítico", chapters: 27 },
-        { name: "Números", chapters: 36 }, { name: "Deuteronômio", chapters: 34 }, { name: "Josué", chapters: 24 },
-        { name: "Juízes", chapters: 21 }, { name: "Rute", chapters: 4 }, { name: "1 Samuel", map: "1Samuel", chapters: 31 },
-        { name: "2 Samuel", map: "2Samuel", chapters: 24 }, { name: "1 Reis", map: "1Reis", chapters: 22 },
-        { name: "2 Reis", map: "2Reis", chapters: 25 }, { name: "1 Crônicas", map: "1Crônicas", chapters: 29 },
-        { name: "2 Crônicas", map: "2Crônicas", chapters: 36 }, { name: "Esdras", chapters: 10 },
-        { name: "Neemias", chapters: 13 }, { name: "Ester", chapters: 10 }, { name: "Jó", chapters: 42 },
-        { name: "Salmos", map: "Salmo", chapters: 150 }, { name: "Provérbios", chapters: 31 },
-        { name: "Eclesiastes", chapters: 12 }, { name: "Cântico dos Cânticos", map: "Cântico", chapters: 8 },
-        { name: "Isaías", chapters: 66 }, { name: "Jeremias", chapters: 52 }, { name: "Lamentações", chapters: 5 },
-        { name: "Ezequiel", chapters: 48 }, { name: "Daniel", chapters: 12 }, { name: "Oseias", chapters: 14 },
-        { name: "Joel", chapters: 3 }, { name: "Amós", chapters: 9 }, { name: "Jonas", chapters: 4 },
-        { name: "Miqueias", chapters: 7 }, { name: "Naum", chapters: 3 }, { name: "Habacuque", chapters: 3 },
-        { name: "Sofonias", chapters: 3 }, { name: "Ageu", chapters: 2 }, { name: "Zacarias", chapters: 14 },
-        { name: "Malaquias", chapters: 4 }
+        ...BIBLIA_STRUCTURE["Antigo Testamento"].col1,
+        ...BIBLIA_STRUCTURE["Antigo Testamento"].col2
     ],
     "Novo Testamento": [
-        { name: "Mateus", chapters: 28 }, { name: "Marcos", chapters: 16 }, { name: "Lucas", chapters: 24 },
-        { name: "João", chapters: 21 }, { name: "Atos", chapters: 28 }, { name: "Romanos", chapters: 16 },
-        { name: "1 Coríntios", map: "1Coríntios", chapters: 16 }, { name: "2 Coríntios", map: "2Coríntios", chapters: 13 },
-        { name: "Gálatas", chapters: 6 }, { name: "Efésios", chapters: 6 }, { name: "Filipenses", chapters: 4 },
-        { name: "Colossenses", chapters: 4 }, { name: "1 Tessalonicenses", map: "1Tessalonicenses", chapters: 5 },
-        { name: "2 Tessalonicenses", map: "2Tessalonicenses", chapters: 3 }, { name: "1 Timóteo", map: "1Timóteo", chapters: 6 },
-        { name: "2 Timóteo", map: "2Timóteo", chapters: 4 }, { name: "Tito", chapters: 3 },
-        { name: "Hebreus", chapters: 13 }, { name: "Tiago", chapters: 5 }, { name: "1 Pedro", map: "1Pedro", chapters: 5 },
-        { name: "2 Pedro", map: "2Pedro", chapters: 3 }, { name: "1 João", map: "1João", chapters: 5 },
-        { name: "Apocalipse", chapters: 22 }
+        ...BIBLIA_STRUCTURE["Novo Testamento"].col1,
+        ...BIBLIA_STRUCTURE["Novo Testamento"].col2
     ]
 };
 
-const NAAView = () => {
+const BibliaView = () => {
     const [selectedBook, setSelectedBook] = useState(null);
     const [selectedChapter, setSelectedChapter] = useState(null);
     const [fullText, setFullText] = useState('');
@@ -368,43 +504,126 @@ const NAAView = () => {
     };
 
     return (
-        <div className="tab-content">
-            <h2>Navegação Bíblica (NAA)</h2>
+        <div className="tab-content" style={{ padding: '0.5rem 0' }}>
             {error && <ErrorMessage message={error} />}
             
             {!selectedBook && (
                 <div>
-                    {Object.entries(NAA_BOOKS).map(([testament, books]) => (
-                        <div key={testament} style={{ marginBottom: '20px' }}>
-                            <h3 style={{ borderBottom: '2px solid #2196F3', paddingBottom: '5px' }}>{testament}</h3>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '10px', marginTop: '10px' }}>
-                                {books.map(book => (
-                                    <button 
-                                        key={book.name} 
-                                        onClick={() => handleSelectBook(book)}
-                                        style={{ padding: '10px', fontSize: '14px' }}
-                                    >
-                                        {book.name}
-                                    </button>
-                                ))}
+                    <h2 style={{ margin: 0, paddingBottom: '1.5rem', color: '#2b569a', fontSize: '1.85rem', fontWeight: 700, border: 'none' }}>
+                        Livros da Bíblia
+                    </h2>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem', alignItems: 'start' }}>
+                        {Object.entries(BIBLIA_STRUCTURE).map(([testamentName, { col1, col2 }]) => (
+                            <div key={testamentName} style={{ backgroundColor: '#ffffff', border: '1px solid #e1eaf5', borderRadius: '16px', padding: '1.5rem 1.75rem', boxShadow: '0 4px 14px rgba(43, 86, 154, 0.04)' }}>
+                                <h3 style={{ fontSize: '1.35rem', fontWeight: 700, color: '#2b569a', marginTop: 0, marginBottom: '1.25rem' }}>
+                                    {testamentName}
+                                </h3>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: '1.5rem' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                        {col1.map(book => (
+                                            <button
+                                                key={book.name}
+                                                onClick={() => handleSelectBook(book)}
+                                                style={{
+                                                    background: 'transparent',
+                                                    border: 'none',
+                                                    color: '#2b569a',
+                                                    fontSize: '0.98rem',
+                                                    fontWeight: 500,
+                                                    textAlign: 'left',
+                                                    padding: '3px 6px',
+                                                    borderRadius: '4px',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.15s ease'
+                                                }}
+                                                onMouseOver={e => {
+                                                    e.currentTarget.style.backgroundColor = '#edf4fc';
+                                                    e.currentTarget.style.color = '#1d4076';
+                                                }}
+                                                onMouseOut={e => {
+                                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                                    e.currentTarget.style.color = '#2b569a';
+                                                }}
+                                            >
+                                                {book.name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                        {col2.map(book => (
+                                            <button
+                                                key={book.name}
+                                                onClick={() => handleSelectBook(book)}
+                                                style={{
+                                                    background: 'transparent',
+                                                    border: 'none',
+                                                    color: '#2b569a',
+                                                    fontSize: '0.98rem',
+                                                    fontWeight: 500,
+                                                    textAlign: 'left',
+                                                    padding: '3px 6px',
+                                                    borderRadius: '4px',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.15s ease'
+                                                }}
+                                                onMouseOver={e => {
+                                                    e.currentTarget.style.backgroundColor = '#edf4fc';
+                                                    e.currentTarget.style.color = '#1d4076';
+                                                }}
+                                                onMouseOut={e => {
+                                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                                    e.currentTarget.style.color = '#2b569a';
+                                                }}
+                                            >
+                                                {book.name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        ))}
+                    </div>
                 </div>
             )}
 
             {selectedBook && !selectedChapter && (
                 <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                        <h3>Livro: {selectedBook.name}</h3>
-                        <button onClick={() => setSelectedBook(null)} style={{ backgroundColor: '#757575', padding: '5px 15px' }}>Voltar aos Livros</button>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '10px' }}>
+                        <h3 style={{ margin: 0, color: '#2b569a', fontSize: '1.4rem', fontWeight: 700 }}>
+                            Livro: {selectedBook.name}
+                        </h3>
+                        <button 
+                            onClick={() => setSelectedBook(null)} 
+                            style={{ backgroundColor: '#2b569a', color: '#fff', padding: '8px 18px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 600 }}
+                        >
+                            ← Voltar aos Livros da Bíblia
+                        </button>
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(60px, 1fr))', gap: '10px' }}>
+                    <p style={{ color: '#555', marginBottom: '1rem', fontWeight: 500 }}>Selecione o capítulo:</p>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(54px, 1fr))', gap: '10px' }}>
                         {Array.from({ length: selectedBook.chapters }, (_, i) => i + 1).map(chapterNum => (
                             <button 
                                 key={chapterNum} 
                                 onClick={() => handleSelectChapter(chapterNum)}
-                                style={{ padding: '15px 5px', fontSize: '16px', fontWeight: 'bold' }}
+                                style={{ 
+                                    padding: '12px 5px', 
+                                    fontSize: '1rem', 
+                                    fontWeight: 'bold', 
+                                    backgroundColor: '#f0f6ff', 
+                                    color: '#2b569a', 
+                                    border: '1px solid #d0e2f7', 
+                                    borderRadius: '8px',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s ease' 
+                                }}
+                                onMouseOver={e => {
+                                    e.currentTarget.style.backgroundColor = '#2b569a';
+                                    e.currentTarget.style.color = '#ffffff';
+                                }}
+                                onMouseOut={e => {
+                                    e.currentTarget.style.backgroundColor = '#f0f6ff';
+                                    e.currentTarget.style.color = '#2b569a';
+                                }}
                             >
                                 {chapterNum}
                             </button>
@@ -415,31 +634,38 @@ const NAAView = () => {
 
             {selectedBook && selectedChapter && (
                 <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                        <h3 style={{ margin: 0, color: '#002171' }}>{selectedBook.name} {selectedChapter}</h3>
-                        <button onClick={() => { setSelectedChapter(null); setFullText(''); }} style={{ backgroundColor: '#757575', padding: '5px 15px' }}>Voltar aos Capítulos</button>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '10px' }}>
+                        <h3 style={{ margin: 0, color: '#2b569a', fontSize: '1.4rem', fontWeight: 700 }}>
+                            {selectedBook.name} {selectedChapter}
+                        </h3>
+                        <button 
+                            onClick={() => { setSelectedChapter(null); setFullText(''); }} 
+                            style={{ backgroundColor: '#2b569a', color: '#fff', padding: '8px 18px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 600 }}
+                        >
+                            ← Voltar aos Capítulos
+                        </button>
                     </div>
                     
                     {loading ? <LoadingSpinner /> : (
-                        <div className="card" style={{ backgroundColor: '#ffffff', color: '#212121', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)' }}>
-                            <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6', fontSize: '16px', marginBottom: '20px' }}>
+                        <div className="card" style={{ backgroundColor: '#ffffff', color: '#212121', padding: '24px', borderRadius: '12px', boxShadow: '0 4px 14px rgba(0, 0, 0, 0.05)', border: '1px solid #e1eaf5' }}>
+                            <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.7', fontSize: '16px', marginBottom: '20px' }}>
                                 {fullText.split(/\r?\n/).map((line, i) => <p key={i} style={{ margin: '0 0 10px 0' }}>{parseBold(line)}</p>)}
                             </div>
                             
-                            <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #e0e0e0', paddingTop: '15px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #e1eaf5', paddingTop: '15px' }}>
                                 <button 
                                     onClick={handlePrev} 
                                     disabled={selectedChapter <= 1}
-                                    style={{ padding: '10px 20px', opacity: selectedChapter <= 1 ? 0.5 : 1 }}
+                                    style={{ padding: '10px 20px', borderRadius: '8px', opacity: selectedChapter <= 1 ? 0.5 : 1, backgroundColor: selectedChapter <= 1 ? '#ccc' : '#2b569a', color: '#fff', border: 'none', cursor: selectedChapter <= 1 ? 'not-allowed' : 'pointer' }}
                                 >
-                                    Anterior
+                                    ← Anterior
                                 </button>
                                 <button 
                                     onClick={handleNext} 
                                     disabled={selectedChapter >= selectedBook.chapters}
-                                    style={{ padding: '10px 20px', opacity: selectedChapter >= selectedBook.chapters ? 0.5 : 1 }}
+                                    style={{ padding: '10px 20px', borderRadius: '8px', opacity: selectedChapter >= selectedBook.chapters ? 0.5 : 1, backgroundColor: selectedChapter >= selectedBook.chapters ? '#ccc' : '#2b569a', color: '#fff', border: 'none', cursor: selectedChapter >= selectedBook.chapters ? 'not-allowed' : 'pointer' }}
                                 >
-                                    Próximo
+                                    Próximo →
                                 </button>
                             </div>
                         </div>
@@ -449,6 +675,8 @@ const NAAView = () => {
         </div>
     );
 };
+
+const NAAView = BibliaView;
 
 const CapituloView = () => {
     const [ref, setRef] = useState('');
@@ -487,11 +715,14 @@ const CapituloView = () => {
         setError('');
         setUsedCommentaries([]);
 
+        // Preserve existing data when loading more themes
+        const previousResult = more ? result : null;
+
         let existingTitles = '';
         if (more && result && result.temasImportantes) {
-            existingTitles = `Os seguintes temas já foram abordados e não devem ser repetidos: ${result.temasImportantes.map(t => t.titulo).join(', ')}. Gere temas IMPORTANTES e TOTALMENTE NOVOS que ainda não foram abordados, com abordagens teológicas e focos diferentes.`;
+            existingTitles = `Os seguintes temas já foram abordados e NÃO devem ser repetidos: ${result.temasImportantes.map(t => t.titulo).join(', ')}. Gere 3 temas IMPORTANTES e TOTALMENTE NOVOS que ainda não foram abordados, com abordagens teológicas e focos completamente diferentes dos anteriores.`;
         }
-        setResult(null);
+        if (!more) setResult(null);
 
         try {
             const commentaries = await fetchCommentaries(ref);
@@ -519,12 +750,12 @@ const CapituloView = () => {
                     sinteseCapitulo: chapterText && !chapterText.startsWith('Capítulo não encontrado')
                         ? `[Busca Direta Supabase - Sem IA]\n\nTexto Bíblico de ${ref}:\n${chapterText}`
                         : `[Busca Direta Supabase - Sem IA]\n\nForam encontrados ${commentaries.length} comentário(s) no banco de dados para ${ref}.`,
-                    temasImportantes: temas
+                    temasImportantes: previousResult ? [...previousResult.temasImportantes, ...temas] : temas
                 });
                 return;
             }
 
-            let prompt = `Faça uma análise aprofundada do capítulo ${ref}. Forneça uma síntese do capítulo e identifique os temas mais importantes com seus versículos chave. ${existingTitles}`;
+            let prompt = `IMPORTANTE: Responda SEMPRE em português brasileiro correto, com acentuação completa e grafia correta.\n\nFaça uma análise aprofundada do capítulo ${ref}. Forneça uma síntese do capítulo e identifique os 3 temas mais importantes com seus versículos chave. ${existingTitles}`;
             
             if (commentaries.length > 0) {
                 prompt += `\n\nConsidere e incorpore ativamente em sua análise teológica as informações dos seguintes comentários históricos de apoio:\n`;
@@ -561,11 +792,19 @@ const CapituloView = () => {
                 }
             });
             const jsonResult = JSON.parse(responseText);
-            jsonResult.temasImportantes = await Promise.all(jsonResult.temasImportantes.map(async (tema: { titulo: string; explicacao: string; versiculos: string }) => {
+            const newTemas = await Promise.all(jsonResult.temasImportantes.map(async (tema: { titulo: string; explicacao: string; versiculos: string }) => {
                 const text = await getBibleTextFromRef(ref, tema.versiculos);
                 return { ...tema, versiculosTexto: text };
             }));
-            setResult(jsonResult);
+            // If "more", append new themes to existing ones and keep existing sinteseCapitulo
+            if (more && previousResult) {
+                setResult({
+                    sinteseCapitulo: previousResult.sinteseCapitulo,
+                    temasImportantes: [...previousResult.temasImportantes, ...newTemas]
+                });
+            } else {
+                setResult({ ...jsonResult, temasImportantes: newTemas });
+            }
         } catch (e) {
             setError(formatGeminiError(e, 'Falha ao analisar o capítulo.'));
         } finally {
@@ -2061,7 +2300,7 @@ Responda APENAS em JSON com um array de objetos com as chaves: "author", "book",
 
 // --- Main App Component ---
 const App = () => {
-    const TABS = ['NAA', 'Capítulo', 'Versículo', 'Pensamentos', 'Ilustrações', 'Construção', 'Chat', 'Obras'];
+    const TABS = ['BÍBLIA', 'Capítulo', 'Versículo', 'Pensamentos', 'Ilustrações', 'Construção', 'Chat', 'Obras'];
     const [activeTab, setActiveTab] = useState(TABS[0]);
     const [resetKey, setResetKey] = useState(0);
 
@@ -2149,7 +2388,12 @@ const App = () => {
                     justifyContent: 'center'
                 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', minWidth: '160px' }}>
-                        <label style={{ fontWeight: 'bold', fontSize: '0.8rem', color: '#0d47a1' }}>PROVEDOR DE IA:</label>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <label style={{ fontWeight: 'bold', fontSize: '0.8rem', color: '#0d47a1' }}>PROVEDOR DE IA:</label>
+                            {provider === 'ollama' && (
+                                <OllamaStartButton />
+                            )}
+                        </div>
                         <select
                             value={provider}
                             onChange={(e) => handleProviderChange(e.target.value)}
@@ -2200,7 +2444,7 @@ const App = () => {
                 ))}
             </nav>
             <main>
-                <div style={{ display: activeTab === 'NAA' ? 'block' : 'none' }}><NAAView key={`naa-${resetKey}`} /></div>
+                <div style={{ display: activeTab === 'BÍBLIA' ? 'block' : 'none' }}><BibliaView key={`biblia-${resetKey}`} /></div>
                 <div style={{ display: activeTab === 'Capítulo' ? 'block' : 'none' }}><CapituloView /></div>
                 <div style={{ display: activeTab === 'Versículo' ? 'block' : 'none' }}><VersiculoView key={`versiculo-${resetKey}`} /></div>
                 <div style={{ display: activeTab === 'Pensamentos' ? 'block' : 'none' }}><PensamentosView key={`pensamentos-${resetKey}`} /></div>
