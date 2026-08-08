@@ -523,6 +523,12 @@ const BibliaView = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
+    const [isInterlinear, setIsInterlinear] = useState(false);
+    const [bhsWords, setBhsWords] = useState<any[]>([]);
+    const [selectedBhsWord, setSelectedBhsWord] = useState<any | null>(null);
+    const [bhsAiAnalysis, setBhsAiAnalysis] = useState('');
+    const [loadingBhsAi, setLoadingBhsAi] = useState(false);
+
     const handleSelectBook = (book) => {
         setSelectedBook(book);
         setSelectedChapter(null);
@@ -536,6 +542,9 @@ const BibliaView = () => {
         setLoading(true);
         setError('');
         setFullText('');
+        setBhsWords([]);
+        setSelectedBhsWord(null);
+        setBhsAiAnalysis('');
         
         try {
             const bookQueryName = selectedBook.map || selectedBook.name;
@@ -545,6 +554,16 @@ const BibliaView = () => {
                 setFullText(text);
             } else {
                 setError(text || 'Capítulo não encontrado.');
+            }
+
+            // Fetch BHS if Old Testament
+            const bookIdx = getHebrewBookIndex(bookQueryName);
+            if (bookIdx !== -1) {
+                const response = await fetch(`/api/hebrew-bible?book=${bookIdx + 1}&chapter=${chapterNumber}`);
+                if (response.ok) {
+                    const json = await response.json();
+                    setBhsWords(json.data || []);
+                }
             }
         } catch (e) {
             console.error(e);
@@ -563,6 +582,46 @@ const BibliaView = () => {
     const handleNext = () => {
         if (selectedBook && selectedChapter < selectedBook.chapters) {
             handleSelectChapter(selectedChapter + 1);
+        }
+    };
+
+    const bhsWordsByVerse = React.useMemo(() => {
+        const map: Record<number, any[]> = {};
+        bhsWords.forEach(w => {
+            if (!map[w.verse]) {
+                map[w.verse] = [];
+            }
+            map[w.verse].push(w);
+        });
+        return map;
+    }, [bhsWords]);
+
+    const handleBhsAiAnalysis = async () => {
+        if (!selectedBhsWord || !selectedBook || !selectedChapter) return;
+        setLoadingBhsAi(true);
+        setBhsAiAnalysis('');
+        const prompt = `Analise a palavra hebraica original a seguir no contexto bíblico da passagem ${selectedBook.name} ${selectedChapter}:${selectedBhsWord.verse}:
+Palavra Original (Hebraico): ${selectedBhsWord.word.replace(/<[^>]*>/g, '')}
+Transliteração: ${selectedBhsWord.translit}
+Morfologia: ${selectedBhsWord.morphDetail} (${selectedBhsWord.morphCode})
+Glossário/Significado literal: ${selectedBhsWord.gloss}
+Tradução aproximada: ${selectedBhsWord.bsb ? selectedBhsWord.bsb.replace(/〔\d+＠(.*)〕/, '$1') : 'N/A'}
+Número Strong: ${selectedBhsWord.strong}
+
+Por favor, forneça uma análise teológica detalhada em português, incluindo:
+1. O significado da raiz original e sua importância cultural/teológica.
+2. Como esta palavra contribui para o sentido teológico do versículo em questão.
+3. Se houver alguma nuance que a tradução em português geralmente perde, explique de forma simples e enriquecedora para um pregador ou estudante da Bíblia.
+Retorne um texto bem formatado em Markdown com títulos curtos.`;
+
+        try {
+            const result = await generateAIContent({ prompt });
+            setBhsAiAnalysis(result);
+        } catch (e: any) {
+            console.error(e);
+            setBhsAiAnalysis(`Erro ao gerar análise com IA: ${e.message || e}`);
+        } finally {
+            setLoadingBhsAi(false);
         }
     };
 
@@ -721,18 +780,87 @@ const BibliaView = () => {
                         <h3 style={{ margin: 0, color: '#2b569a', fontSize: '1.4rem', fontWeight: 700 }}>
                             {selectedBook.name} {selectedChapter}
                         </h3>
-                        <button 
-                            onClick={() => { setSelectedChapter(null); setFullText(''); }} 
-                            style={{ backgroundColor: '#2b569a', color: '#fff', padding: '8px 18px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 600 }}
-                        >
-                            ← Voltar aos Capítulos
-                        </button>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            <button
+                                onClick={() => setIsInterlinear(prev => !prev)}
+                                style={{
+                                    backgroundColor: isInterlinear ? '#2e7d32' : '#f5f5f5',
+                                    color: isInterlinear ? '#fff' : '#333',
+                                    padding: '8px 18px',
+                                    borderRadius: '8px',
+                                    border: '1px solid #ccc',
+                                    cursor: 'pointer',
+                                    fontWeight: 600,
+                                    transition: 'all 0.15s ease'
+                                }}
+                            >
+                                {isInterlinear ? '✓ Interlinear' : 'Interlinear'}
+                            </button>
+                            <button 
+                                onClick={() => { setSelectedChapter(null); setFullText(''); }} 
+                                style={{ backgroundColor: '#2b569a', color: '#fff', padding: '8px 18px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 600 }}
+                            >
+                                ← Voltar aos Capítulos
+                            </button>
+                        </div>
                     </div>
                     
                     {loading ? <LoadingSpinner /> : (
                         <div className="card" style={{ backgroundColor: '#ffffff', color: '#212121', padding: '24px', borderRadius: '12px', boxShadow: '0 4px 14px rgba(0, 0, 0, 0.05)', border: '1px solid #e1eaf5' }}>
-                            <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.7', fontSize: '16px', marginBottom: '20px' }}>
-                                {fullText.split(/\r?\n/).map((line, i) => <p key={i} style={{ margin: '0 0 10px 0' }}>{parseBold(line)}</p>)}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginBottom: '20px' }}>
+                                {fullText.split(/\r?\n/).filter(line => line.trim()).map((line, i) => {
+                                    const match = line.trim().match(/^\*\*(\d+)\*\*\s*(.*)$/);
+                                    const vNum = match ? parseInt(match[1], 10) : null;
+                                    const verseContent = match ? match[2] : line;
+
+                                    return (
+                                        <div key={i} style={{ borderBottom: '1px dashed #e1eaf5', paddingBottom: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                            <p style={{ margin: 0, fontSize: '16px', lineHeight: '1.7', textAlign: 'left' }}>
+                                                {vNum !== null ? <strong>{vNum} </strong> : null}
+                                                {parseBold(verseContent)}
+                                            </p>
+                                            {isInterlinear && vNum !== null && bhsWordsByVerse[vNum] && bhsWordsByVerse[vNum].length > 0 && (
+                                                <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: '10px 6px', alignItems: 'center', direction: 'rtl', textAlign: 'right', backgroundColor: '#edf4fc', padding: '8px 12px', borderRadius: '8px', borderRight: '3px solid #2b569a', marginTop: '4px' }}>
+                                                    {bhsWordsByVerse[vNum].map((word, idx) => (
+                                                        <span
+                                                            key={idx}
+                                                            onClick={() => {
+                                                                setSelectedBhsWord(word);
+                                                                setBhsAiAnalysis('');
+                                                            }}
+                                                            title={word.gloss || ''}
+                                                            style={{
+                                                                fontFamily: "'SBL BibLit', 'SBL Hebrew', 'Times New Roman', serif",
+                                                                fontSize: '1.75rem',
+                                                                cursor: 'pointer',
+                                                                padding: '2px 6px',
+                                                                borderRadius: '6px',
+                                                                backgroundColor: selectedBhsWord?.sort === word.sort ? '#fff' : 'transparent',
+                                                                color: selectedBhsWord?.sort === word.sort ? '#0d47a1' : '#212121',
+                                                                transition: 'all 0.15s ease',
+                                                                borderBottom: selectedBhsWord?.sort === word.sort ? '3px solid #2b569a' : '3px solid transparent',
+                                                                lineHeight: '2.4rem'
+                                                            }}
+                                                            onMouseOver={e => {
+                                                                if (selectedBhsWord?.sort !== word.sort) {
+                                                                    e.currentTarget.style.backgroundColor = '#fff';
+                                                                    e.currentTarget.style.color = '#2b569a';
+                                                                }
+                                                            }}
+                                                            onMouseOut={e => {
+                                                                if (selectedBhsWord?.sort !== word.sort) {
+                                                                    e.currentTarget.style.backgroundColor = 'transparent';
+                                                                    e.currentTarget.style.color = '#212121';
+                                                                }
+                                                            }}
+                                                            dangerouslySetInnerHTML={{ __html: word.word }}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </div>
                             
                             <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #e1eaf5', paddingTop: '15px' }}>
@@ -755,6 +883,82 @@ const BibliaView = () => {
                     )}
                 </div>
             )}
+
+            {selectedBhsWord && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+                    backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', 
+                    justifyContent: 'center', alignItems: 'center', zIndex: 1100, padding: '20px'
+                }}>
+                    <div style={{
+                        backgroundColor: '#ffffff', border: '2px solid #2b569a', borderRadius: '12px',
+                        padding: '24px', boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)', position: 'relative',
+                        maxWidth: '400px', width: '100%', maxHeight: '90vh', overflowY: 'auto',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', textAlign: 'center'
+                    }}>
+                        <button
+                            onClick={() => { setSelectedBhsWord(null); setBhsAiAnalysis(''); }}
+                            style={{
+                                position: 'absolute', top: '12px', right: '12px', background: 'transparent',
+                                border: 'none', color: '#888', fontSize: '1.25rem', cursor: 'pointer', fontWeight: 'bold', padding: '4px'
+                            }}
+                        >
+                            ✕
+                        </button>
+                        <span style={{ fontSize: '0.8rem', color: '#888', fontWeight: 'bold', alignSelf: 'flex-start' }}>
+                            {selectedBhsWord.verse}:{selectedBhsWord.sort}
+                        </span>
+                        <span style={{ fontFamily: "'SBL BibLit', 'SBL Hebrew', 'Times New Roman', serif", fontSize: '2.5rem', fontWeight: 'bold', color: '#2b569a', marginTop: '4px' }} dangerouslySetInnerHTML={{ __html: selectedBhsWord.word }} />
+                        <span style={{ fontSize: '1rem', fontStyle: 'italic', color: '#555' }}>
+                            {selectedBhsWord.translit} ({selectedBhsWord.phonetic})
+                        </span>
+                        <span style={{ fontSize: '1.05rem', fontWeight: 600, color: '#0d47a1' }}>
+                            Literal: {selectedBhsWord.gloss}
+                        </span>
+                        {selectedBhsWord.bsb && (
+                            <span style={{ fontSize: '0.95rem', color: '#f9a825', fontWeight: 600 }}>
+                                BSB: {selectedBhsWord.bsb.replace(/〔\d+＠(.*)〕/, '$1')}
+                            </span>
+                        )}
+                        <span style={{ fontSize: '0.85rem', color: '#666', backgroundColor: '#f0f6ff', padding: '4px 10px', borderRadius: '4px', border: '1px solid #d0e2f7' }} title={selectedBhsWord.morphDetail}>
+                            {selectedBhsWord.morphCode}
+                        </span>
+                        <span style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#002171' }}>
+                            Strong: {selectedBhsWord.strong}
+                        </span>
+                        <div style={{ width: '100%', borderTop: '1px solid #e1eaf5', paddingTop: '15px', marginTop: '10px' }}>
+                            <button
+                                onClick={handleBhsAiAnalysis}
+                                disabled={loadingBhsAi}
+                                style={{
+                                    width: '100%', backgroundColor: '#f9a825', color: '#ffffff', padding: '10px',
+                                    border: 'none', borderRadius: '8px', cursor: loadingBhsAi ? 'not-allowed' : 'pointer',
+                                    fontWeight: 'bold', fontSize: '0.95rem', display: 'flex', alignItems: 'center',
+                                    justifyContent: 'center', gap: '8px', boxShadow: '0 2px 5px rgba(249, 168, 37, 0.2)'
+                                }}
+                            >
+                                {loadingBhsAi ? 'Analisando com IA...' : '✨ Analisar Palavra com IA'}
+                            </button>
+                            {bhsAiAnalysis && (
+                                <div style={{
+                                    marginTop: '15px', backgroundColor: '#fcf8e3', border: '1px solid #faebcc',
+                                    borderRadius: '8px', padding: '12px', fontSize: '0.9rem', color: '#8a6d3b',
+                                    maxHeight: '200px', overflowY: 'auto', textAlign: 'left'
+                                }}>
+                                    {bhsAiAnalysis.split('\n').map((line, i) => {
+                                        let trimmed = line.trim();
+                                        if (trimmed.startsWith('### ')) return <h5 key={i} style={{ fontSize: '1.05rem', fontWeight: 'bold', color: '#0d47a1', margin: '12px 0 6px 0' }}>{trimmed.slice(4)}</h5>;
+                                        if (trimmed.startsWith('## ')) return <h4 key={i} style={{ fontSize: '1.15rem', fontWeight: 'bold', color: '#0d47a1', margin: '16px 0 8px 0' }}>{trimmed.slice(3)}</h4>;
+                                        if (trimmed.startsWith('# ')) return <h3 key={i} style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#0d47a1', margin: '18px 0 10px 0' }}>{trimmed.slice(2)}</h3>;
+                                        if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) return <li key={i} style={{ marginLeft: '1rem', marginBottom: '4px' }}>{parseBold(trimmed.slice(2))}</li>;
+                                        return <p key={i} style={{ margin: '0 0 8px 0', lineHeight: '1.5' }}>{parseBold(line)}</p>;
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
@@ -771,6 +975,9 @@ const BhsView = () => {
     const [aiAnalysis, setAiAnalysis] = useState('');
     const [loadingAi, setLoadingAi] = useState(false);
 
+    const [isInterlinear, setIsInterlinear] = useState(false);
+    const [naaVersesMap, setNaaVersesMap] = useState<Record<number, string>>({});
+
     const handleSelectBook = (book: any) => {
         setSelectedBook(book);
         setSelectedChapter(null);
@@ -786,6 +993,7 @@ const BhsView = () => {
         setBhsWords([]);
         setSelectedWord(null);
         setAiAnalysis('');
+        setNaaVersesMap({});
         
         try {
             const bookName = selectedBook.map || selectedBook.name;
@@ -797,6 +1005,20 @@ const BhsView = () => {
                     setBhsWords(json.data || []);
                 } else {
                     setError('Falha ao carregar o texto hebraico (BHS).');
+                }
+
+                // Fetch NAA text
+                const ref = `${bookName} ${chapterNumber}`;
+                const naaText = await getBibleTextFromRef(ref);
+                if (naaText && !naaText.startsWith("Capítulo não encontrado") && !naaText.startsWith("Referência inválida")) {
+                    const parsed: Record<number, string> = {};
+                    naaText.split(/\n+/).forEach(line => {
+                        const match = line.trim().match(/^\*\*(\d+)\*\*\s*(.*)$/);
+                        if (match) {
+                            parsed[parseInt(match[1], 10)] = match[2];
+                        }
+                    });
+                    setNaaVersesMap(parsed);
                 }
             } else {
                 setError('Livro não encontrado no mapeamento hebraico.');
@@ -993,59 +1215,86 @@ Retorne um texto bem formatado em Markdown com títulos curtos.`;
                         <h3 style={{ margin: 0, color: '#2b569a', fontSize: '1.4rem', fontWeight: 700 }}>
                             {selectedBook.name} {selectedChapter} (BHS)
                         </h3>
-                        <button 
-                            onClick={() => { setSelectedChapter(null); setBhsWords([]); }} 
-                            style={{ backgroundColor: '#2b569a', color: '#fff', padding: '8px 18px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 600 }}
-                        >
-                            ← Voltar aos Capítulos
-                        </button>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                            <button
+                                onClick={() => setIsInterlinear(prev => !prev)}
+                                style={{
+                                    backgroundColor: isInterlinear ? '#2e7d32' : '#f5f5f5',
+                                    color: isInterlinear ? '#fff' : '#333',
+                                    padding: '8px 18px',
+                                    borderRadius: '8px',
+                                    border: '1px solid #ccc',
+                                    cursor: 'pointer',
+                                    fontWeight: 600,
+                                    transition: 'all 0.15s ease'
+                                }}
+                            >
+                                {isInterlinear ? '✓ Interlinear' : 'Interlinear'}
+                            </button>
+                            <button 
+                                onClick={() => { setSelectedChapter(null); setBhsWords([]); }} 
+                                style={{ backgroundColor: '#2b569a', color: '#fff', padding: '8px 18px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 600 }}
+                            >
+                                ← Voltar aos Capítulos
+                            </button>
+                        </div>
                     </div>
                     
                     {loading ? <LoadingSpinner /> : (
                         <div className="card" style={{ backgroundColor: '#ffffff', color: '#212121', padding: '24px', borderRadius: '12px', boxShadow: '0 4px 14px rgba(0, 0, 0, 0.05)', border: '1px solid #e1eaf5' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', marginBottom: '20px' }}>
-                                {(Object.entries(bhsWordsByVerse) as [string, any[]][]).map(([verseNum, verseWords]) => (
-                                    <div key={verseNum} style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: '10px 6px', alignItems: 'center', padding: '8px 10px', borderBottom: '1px dashed #e1eaf5', direction: 'rtl', textAlign: 'right' }}>
-                                        <span style={{ fontSize: '1rem', fontWeight: 'bold', color: '#2b569a', marginLeft: '6px', alignSelf: 'center', userSelect: 'none', direction: 'ltr' }}>
-                                            {verseNum}
-                                        </span>
-                                        {verseWords.map((word, idx) => (
-                                            <span
-                                                key={idx}
-                                                onClick={() => {
-                                                    setSelectedWord(word);
-                                                    setAiAnalysis('');
-                                                }}
-                                                title={word.gloss || ''}
-                                                style={{
-                                                    fontFamily: "'SBL BibLit', 'SBL Hebrew', 'Times New Roman', serif",
-                                                    fontSize: '1.8rem',
-                                                    cursor: 'pointer',
-                                                    padding: '2px 6px',
-                                                    borderRadius: '6px',
-                                                    backgroundColor: selectedWord?.sort === word.sort ? '#edf4fc' : 'transparent',
-                                                    color: selectedWord?.sort === word.sort ? '#0d47a1' : '#212121',
-                                                    transition: 'all 0.15s ease',
-                                                    borderBottom: selectedWord?.sort === word.sort ? '3px solid #2b569a' : '3px solid transparent',
-                                                    lineHeight: '2.4rem'
-                                                }}
-                                                onMouseOver={e => {
-                                                    if (selectedWord?.sort !== word.sort) {
-                                                        e.currentTarget.style.backgroundColor = '#f0f6ff';
-                                                        e.currentTarget.style.color = '#2b569a';
-                                                    }
-                                                }}
-                                                onMouseOut={e => {
-                                                    if (selectedWord?.sort !== word.sort) {
-                                                        e.currentTarget.style.backgroundColor = 'transparent';
-                                                        e.currentTarget.style.color = '#212121';
-                                                    }
-                                                }}
-                                                dangerouslySetInnerHTML={{ __html: word.word }}
-                                            />
-                                        ))}
-                                    </div>
-                                ))}
+                                {(Object.entries(bhsWordsByVerse) as [string, any[]][]).map(([verseNum, verseWords]) => {
+                                    const vNum = parseInt(verseNum, 10);
+                                    return (
+                                        <div key={verseNum} style={{ borderBottom: '1px dashed #e1eaf5', paddingBottom: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: '10px 6px', alignItems: 'center', direction: 'rtl', textAlign: 'right' }}>
+                                                <span style={{ fontSize: '1rem', fontWeight: 'bold', color: '#2b569a', marginLeft: '6px', alignSelf: 'center', userSelect: 'none', direction: 'ltr' }}>
+                                                    {verseNum}
+                                                </span>
+                                                {verseWords.map((word, idx) => (
+                                                    <span
+                                                        key={idx}
+                                                        onClick={() => {
+                                                            setSelectedWord(word);
+                                                            setAiAnalysis('');
+                                                        }}
+                                                        title={word.gloss || ''}
+                                                        style={{
+                                                            fontFamily: "'SBL BibLit', 'SBL Hebrew', 'Times New Roman', serif",
+                                                            fontSize: '1.8rem',
+                                                            cursor: 'pointer',
+                                                            padding: '2px 6px',
+                                                            borderRadius: '6px',
+                                                            backgroundColor: selectedWord?.sort === word.sort ? '#edf4fc' : 'transparent',
+                                                            color: selectedWord?.sort === word.sort ? '#0d47a1' : '#212121',
+                                                            transition: 'all 0.15s ease',
+                                                            borderBottom: selectedWord?.sort === word.sort ? '3px solid #2b569a' : '3px solid transparent',
+                                                            lineHeight: '2.4rem'
+                                                        }}
+                                                        onMouseOver={e => {
+                                                            if (selectedWord?.sort !== word.sort) {
+                                                                e.currentTarget.style.backgroundColor = '#f0f6ff';
+                                                                e.currentTarget.style.color = '#2b569a';
+                                                            }
+                                                        }}
+                                                        onMouseOut={e => {
+                                                            if (selectedWord?.sort !== word.sort) {
+                                                                e.currentTarget.style.backgroundColor = 'transparent';
+                                                                e.currentTarget.style.color = '#212121';
+                                                            }
+                                                        }}
+                                                        dangerouslySetInnerHTML={{ __html: word.word }}
+                                                    />
+                                                ))}
+                                            </div>
+                                            {isInterlinear && naaVersesMap[vNum] && (
+                                                <div style={{ fontSize: '0.95rem', color: '#555', fontStyle: 'italic', padding: '4px 8px', borderLeft: '3px solid #4caf50', direction: 'ltr', textAlign: 'left', backgroundColor: '#fcfcfc', borderRadius: '4px', marginTop: '4px' }}>
+                                                    {parseBold(naaVersesMap[vNum])}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </div>
                             
                             <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #e1eaf5', paddingTop: '15px' }}>
