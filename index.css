@@ -298,3 +298,13 @@ button:disabled {
         grid-column: 1 / -1;
     }
 }
+
+/* Custom Hebrew Font integration */
+@font-face {
+  font-family: 'SBL BibLit';
+  src: url('https://www.sbl-site.org/wp-content/themes/basket/fonts/bib-fonts/SBL_BLit.ttf') format('truetype');
+}
+
+heb, .hebrew-text {
+  font-family: 'SBL BibLit', 'SBL Hebrew', 'Times New Roman', serif;
+}
