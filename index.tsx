@@ -2860,6 +2860,7 @@ const CenterContent = ({ selectedBook, selectedChapter, selectedVerse }) => {
     const [comentarios, setComentarios] = useState([]);
     const [loadingComentarios, setLoadingComentarios] = useState(false);
     const [selectedCommentaries, setSelectedCommentaries] = useState({ 'Todos': true });
+    const [isRefsMenuOpen, setIsRefsMenuOpen] = useState(false);
 
     // Original Interlinear State
     const [originalVerses, setOriginalVerses] = useState([]);
@@ -3074,7 +3075,13 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
     const displayTitle = selectedBook ? `${selectedBook.name} ${selectedChapter || ''}${selectedVerse ? ':'+selectedVerse : ''}` : 'Selecione um texto bíblico no painel lateral';
 
     // Get active comments
-    const activeCommentaries = comentarios.filter(c => selectedCommentaries['Todos'] || selectedCommentaries[c.author]);
+    let activeCommentaries = comentarios.filter(c => selectedCommentaries['Todos'] || selectedCommentaries[c.author]);
+    
+    // Filtro por versículo (Exibe o versículo selecionado, ou todos os versos do capítulo se nenhum verso for selecionado)
+    if (selectedVerse) {
+        activeCommentaries = activeCommentaries.filter(c => String(c.verse) === String(selectedVerse));
+    }
+    
     const authors = Array.from(new Set(comentarios.map(c => c.author)));
 
     return (
@@ -3245,17 +3252,36 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
                                         <div style={{ color: '#666', textAlign: 'center' }}>Nenhum comentário encontrado no banco de dados.</div>
                                     ) : (
                                         <>
-                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', backgroundColor: '#f0f6ff', padding: '10px', borderRadius: '8px', border: '1px solid #d0e2f7' }}>
-                                                <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontWeight: 'bold', color: '#0d47a1' }}>
-                                                    <input type="checkbox" checked={!!selectedCommentaries['Todos']} onChange={() => handleCommentaryCheck('Todos')} />
-                                                    Todos
-                                                </label>
-                                                {authors.map(author => (
-                                                    <label key={author} style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', color: '#333' }}>
-                                                        <input type="checkbox" checked={!!selectedCommentaries[author]} onChange={() => handleCommentaryCheck(author)} />
-                                                        {author}
-                                                    </label>
-                                                ))}
+                                            <div style={{ display: 'flex', width: '100%', gap: '10px' }}>
+                                                {/* Box de Referência (30%) */}
+                                                <div style={{ flex: '0 0 30%', backgroundColor: '#fff', border: '1px solid #ccc', borderRadius: '8px', padding: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: '#333', fontSize: '1rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                    {selectedBook?.name} {selectedChapter}{selectedVerse ? `:${selectedVerse}` : ''}
+                                                </div>
+                                                
+                                                {/* Menu Referências (70%) */}
+                                                <div style={{ flex: '1', position: 'relative' }}>
+                                                    <button 
+                                                        onClick={() => setIsRefsMenuOpen(!isRefsMenuOpen)}
+                                                        style={{ width: '100%', backgroundColor: '#f0f6ff', border: '1px solid #d0e2f7', borderRadius: '8px', padding: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', fontWeight: 'bold', color: '#0d47a1', fontSize: '1rem' }}
+                                                    >
+                                                        Referências <span>{isRefsMenuOpen ? '▲' : '▼'}</span>
+                                                    </button>
+                                                    
+                                                    {isRefsMenuOpen && (
+                                                        <div style={{ position: 'absolute', top: '100%', left: 0, width: '100%', backgroundColor: '#fff', border: '1px solid #d0e2f7', borderRadius: '8px', marginTop: '5px', boxShadow: '0 4px 8px rgba(0,0,0,0.1)', zIndex: 100, maxHeight: '300px', overflowY: 'auto' }}>
+                                                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 'bold', color: '#0d47a1', padding: '10px 15px', borderBottom: '1px solid #eee' }} onClick={(e) => e.stopPropagation()}>
+                                                                <input type="checkbox" checked={!!selectedCommentaries['Todos']} onChange={() => handleCommentaryCheck('Todos')} />
+                                                                Todos
+                                                            </label>
+                                                            {authors.map(author => (
+                                                                <label key={author} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: '#333', padding: '10px 15px', borderBottom: '1px solid #eee' }} onClick={(e) => e.stopPropagation()}>
+                                                                    <input type="checkbox" checked={!!selectedCommentaries[author]} onChange={() => handleCommentaryCheck(author)} />
+                                                                    {author}
+                                                                </label>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
                                             <div style={{ overflowY: 'auto', flexGrow: 1, paddingRight: '5px' }}>
                                                 {activeCommentaries.map(c => (
