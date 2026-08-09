@@ -1,0 +1,1931 @@
+diff a/index.tsx b/index.tsx	(rejected hunks)
+@@ -249,6 +249,275 @@ const normalizeBookName = (book: string): string => {
+     return map[lower] || book;
+ };
+ 
++const extractVersesFromRefLocal = (bibleText: string, ref: string, defaultVersesStr = '') => {
++    const match = ref.match(/^(.+?)\s+(\d+):?(.*)$/);
++    if (!match) return "Refer├¬ncia inv├ílida.";
++
++    let book = match[1].trim();
++    book = book.replace(/^(\d)\s+/, '$1');
++    book = normalizeBookName(book);
++    const chapter = match[2];
++    
++    let versesStr = (defaultVersesStr || match[3] || '').trim();
++
++    if (versesStr.includes(':')) {
++        versesStr = versesStr.substring(versesStr.lastIndexOf(':') + 1);
++    } else {
++        const vMatch = versesStr.match(/(?:versos?|vs?\.?|vers[├¡i]culos?)\s*(.*)/i);
++        if (vMatch) versesStr = vMatch[1];
++    }
++
++    const escapedBook = book.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\import React, { useState, useCallback, Fragment, useEffect } from 'react';
++import { createRoot } from 'react-dom/client';
++import { GoogleGenAI, Type } from "@google/genai";
++import { supabase, isSupabaseConfigured } from './supabase';
++
++// --- Helper Components ---
++const LoadingSpinner = () => <div className="loading-container"><div className="loader"></div></div>;
++const ErrorMessage = ({ message }) => <div className="error-message">{message}</div>;
++const handleAddClick = (e, eventName, detail) => {
++    window.dispatchEvent(new CustomEvent(eventName, { detail }));
++    const btn = e.currentTarget;
++    btn.style.backgroundColor = '#4caf50';
++    btn.style.color = 'white';
++    btn.innerText = 'Adicionado!';
++};
++
++const parseBold = (text = '') => {
++    const parts = text.split(/\*\*(.*?)\*\*/g);
++    return parts.map((part, index) =>
++        index % 2 === 1 ? <strong key={index}>{part}</strong> : <Fragment key={index}>{part}</Fragment>
++    );
++};
++
++const formatGeminiError = (e: any, defaultMessage: string): string => {
++    console.error(e);
++    const msg = e?.message || e?.toString() || '';
++    if (msg.includes('spending cap') || msg.includes('RESOURCE_EXHAUSTED') || e?.status === 429 || msg.includes('429')) {
++        return 'Limite de cota excedido no Google AI Studio (Erro 429). Acesse https://ai.studio/spend para ajustar seu limite de gastos ou insira uma nova API Key.';
++    }
++    if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('TypeError') || msg.includes('network error')) {
++        return 'Erro de Conex├úo: N├úo foi poss├¡vel conectar ao Ollama local. Certifique-se de que o Ollama est├í rodando no seu computador e que as permiss├Áes CORS foram ativadas (com a vari├ível OLLAMA_ORIGINS="*").';
++    }
++    return `${defaultMessage} (Detalhes: ${msg})`;
++};
++
++const parseAIJsonArray = (jsonStr: string): any[] => {
++    let cleanStr = jsonStr.trim();
++    if (cleanStr.startsWith('```json')) {
++        cleanStr = cleanStr.substring(7);
++    }
++    if (cleanStr.endsWith('```')) {
++        cleanStr = cleanStr.substring(0, cleanStr.length - 3);
++    }
++    cleanStr = cleanStr.trim();
++
++    const parsed = JSON.parse(cleanStr);
++    if (Array.isArray(parsed)) {
++        return parsed;
++    }
++    
++    if (typeof parsed === 'object' && parsed !== null) {
++        for (const key of Object.keys(parsed)) {
++            if (Array.isArray(parsed[key])) {
++                return parsed[key];
++            }
++        }
++    }
++    throw new Error("O JSON retornado n├úo ├® um array e n├úo cont├®m nenhuma lista.");
++};
++
++// --- Ollama Launcher Button ---
++const OllamaStartButton = () => {
++    const [status, setStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
++    const [msg, setMsg] = useState('');
++
++    const handleStart = async () => {
++        setStatus('loading');
++        setMsg('');
++        try {
++            const res = await fetch('/api/start-ollama', { method: 'POST' });
++            const data = await res.json();
++            if (res.ok) {
++                setStatus('ok');
++                setMsg(data.message || 'Ollama iniciado!');
++            } else {
++                setStatus('error');
++                setMsg(data.error || 'Erro ao iniciar Ollama.');
++            }
++        } catch (e) {
++            setStatus('error');
++            setMsg('N├úo foi poss├¡vel contatar o servidor.');
++        }
++        setTimeout(() => setStatus('idle'), 4000);
++    };
++
++    const colors: Record<string, string> = { idle: '#1565c0', loading: '#757575', ok: '#2e7d32', error: '#c62828' };
++
++    return (
++        <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
++            <button
++                onClick={handleStart}
++                disabled={status === 'loading'}
++                title="Iniciar Ollama com CORS habilitado"
++                style={{
++                    background: 'none', border: 'none', cursor: status === 'loading' ? 'wait' : 'pointer',
++                    fontSize: '16px', padding: '2px 4px', color: colors[status], lineHeight: 1,
++                    transition: 'transform 0.3s',
++                    animation: status === 'loading' ? 'spin 1s linear infinite' : 'none'
++                }}
++            >
++                ÔÜÖ´©Å
++            </button>
++            {msg && (
++                <span style={{
++                    position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
++                    backgroundColor: status === 'ok' ? '#e8f5e9' : '#ffebee',
++                    color: status === 'ok' ? '#2e7d32' : '#c62828',
++                    border: `1px solid ${status === 'ok' ? '#a5d6a7' : '#ef9a9a'}`,
++                    borderRadius: '4px', padding: '4px 8px', fontSize: '0.7rem',
++                    whiteSpace: 'nowrap', zIndex: 100, marginTop: '4px', boxShadow: '0 2px 6px rgba(0,0,0,0.15)'
++                }}>
++                    {msg}
++                </span>
++            )}
++        </span>
++    );
++};
++
++// --- API Wrapper ---
++const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
++
++const generateAIContent = async ({ prompt, isJson = false, config }: { prompt: string; isJson?: boolean; config?: any }): Promise<string> => {
++    const provider = localStorage.getItem('ai_provider') || 'ollama';
++    if (provider === 'ollama') {
++        const model = localStorage.getItem('ollama_model') || 'qwen2.5:14b';
++        const url = localStorage.getItem('ollama_url') || 'http://localhost:11434';
++        
++        const body: any = {
++            model: model,
++            prompt: prompt,
++            stream: false
++        };
++        if (isJson) {
++            body.format = 'json';
++        }
++        
++        const res = await fetch(`${url}/api/generate`, {
++            method: 'POST',
++            headers: { 'Content-Type': 'application/json' },
++            body: JSON.stringify(body)
++        });
++        
++        if (!res.ok) {
++            throw new Error(`Ollama local respondeu com erro ${res.status}. Certifique-se de que o Ollama est├í rodando no seu computador e que voc├¬ j├í baixou o modelo '${model}' (rode 'ollama pull ${model}' no terminal).`);
++        }
++        const data = await res.json();
++        return data.response;
++    } else {
++        const response = await ai.models.generateContent({
++            model: "gemini-flash-latest",
++            contents: prompt,
++            config: config || (isJson ? { responseMimeType: "application/json" } : undefined)
++        });
++        return response.text;
++    }
++};
++
++// --- Supabase & Local Bible Helper ---
++let cachedBibleText = null;
++const fetchBibleTextLocal = async () => {
++    if (cachedBibleText) return cachedBibleText;
++    try {
++        const response = await fetch('/naa.md');
++        if (!response.ok) throw new Error('Falha ao carregar naa.md');
++        cachedBibleText = await response.text();
++        return cachedBibleText;
++    } catch (e) {
++        console.error(e);
++        return null;
++    }
++};
++
++// Normalize book names to match naa.md format (e.g., "Salmos" -> "Salmo")
++const normalizeBookName = (book: string): string => {
++    const lower = book.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '');
++    const map: Record<string, string> = {
++        'genesis': 'G├¬nesis',
++        'exodo': '├èxodo',
++        'levitico': 'Lev├¡tico',
++        'numeros': 'N├║meros',
++        'deuteronomio': 'Deuteron├┤mio',
++        'josue': 'Josu├®',
++        'juizes': 'Ju├¡zes',
++        'rute': 'Rute',
++        '1samuel': '1Samuel',
++        '2samuel': '2Samuel',
++        '1reis': '1Reis',
++        '2reis': '2Reis',
++        '1cronicas': '1Cr├┤nicas',
++        '2cronicas': '2Cr├┤nicas',
++        'esdras': 'Esdras',
++        'neemias': 'Neemias',
++        'ester': 'Ester',
++        'jo': 'J├│',
++        'salmo': 'Salmo',
++        'salmos': 'Salmo',
++        'proverbios': 'Prov├®rbios',
++        'eclesiastes': 'Eclesiastes',
++        'cantico': 'C├óntico',
++        'canticos': 'C├óntico',
++        'cantares': 'C├óntico',
++        'canticodoscanticos': 'C├óntico',
++        'isaias': 'Isa├¡as',
++        'jeremias': 'Jeremias',
++        'lamentacoes': 'Lamenta├º├Áes',
++        'ezequiel': 'Ezequiel',
++        'daniel': 'Daniel',
++        'oseias': 'Oseias',
++        'joel': 'Joel',
++        'amos': 'Am├│s',
++        'obadias': 'Obadias',
++        'jonas': 'Jonas',
++        'miqueias': 'Miqueias',
++        'naum': 'Naum',
++        'habacuque': 'Habacuque',
++        'sofonias': 'Sofonias',
++        'ageu': 'Ageu',
++        'zacarias': 'Zacarias',
++        'malaquias': 'Malaquias',
++        'mateus': 'Mateus',
++        'marcos': 'Marcos',
++        'lucas': 'Lucas',
++        'joao': 'Jo├úo',
++        'atos': 'Atos',
++        'romanos': 'Romanos',
++        '1corintios': '1Cor├¡ntios',
++        '2corintios': '2Cor├¡ntios',
++        'galatas': 'G├ílatas',
++        'efesios': 'Ef├®sios',
++        'filipenses': 'Filipenses',
++        'colossenses': 'Colossenses',
++        '1tessalonicenses': '1Tessalonicenses',
++        '2tessalonicenses': '2Tessalonicenses',
++        '1timoteo': '1Tim├│teo',
++        '2timoteo': '2Tim├│teo',
++        'tito': 'Tito',
++        'filemom': 'Filemom',
++        'hebreus': 'Hebreus',
++        'tiago': 'Tiago',
++        '1pedro': '1Pedro',
++        '2pedro': '2Pedro',
++        '1joao': '1Jo├úo',
++        '2joao': '2Jo├úo',
++        '3joao': '3Jo├úo',
++        'judas': 'Judas',
++        'apocalipse': 'Apocalipse',
++        'sabedoria': 'Sabedoria de Salom├úo'
++    };
++    return map[lower] || book;
++};
++
+ const extractVersesFromRefLocal = (bibleText: string, ref: string, defaultVersesStr = '') => {
+     const match = ref.match(/^(.+?)\s+(\d+):?(.*)$/);
+     if (!match) return "Refer├¬ncia inv├ílida.";
+@@ -1611,7 +4135,7 @@ Retorne um texto bem formatado em Markdown com t├¡tulos curtos.`;
+ 
+     return (
+         <div className="tab-content">
+-            <h2>An├ílise de Cap├¡tulo</h2>
++            
+             <div className="form-group">
+                 <input type="text" value={ref} onChange={e => setRef(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAnalyze()} placeholder="Ex: G├¬nesis 1" />
+                 <button onClick={handleAnalyze} disabled={loading}>{loading ? 'Analisando...' : 'Analisar'}</button>
+@@ -2231,7 +4756,7 @@ F) An├ílise Teol├│gica - Como se encaixa no plano geral da B├¡blia e conex├Áes d
+ 
+     return (
+         <div className="tab-content">
+-            <h2>An├ílise de Vers├¡culo</h2>
++            
+             <div className="form-group">
+                 <input type="text" value={ref} onChange={e => setRef(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAnalyze()} placeholder="Ex: Jo├úo 3:16" />
+                 <button onClick={handleAnalyze} disabled={loading}>{loading ? 'Analisando...' : 'Analisar'}</button>
+@@ -2651,10 +5177,10 @@ const PensamentosView = () => {
+ 
+     return (
+         <div className="tab-content">
+-            <h2>Busca de Cita├º├Áes</h2>
++
+             <div className="form-group">
+                 <input type="text" value={topic} onChange={e => setTopic(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch(false)} placeholder="Ex: Gra├ºa, C.S. Lewis" />
+-                <button onClick={() => handleSearch(false)} disabled={loading}>{loading ? 'Buscando...' : 'Buscar'}</button>
++                <button onClick={() => handleSearch(false)} disabled={loading} style={{ padding: '8px 12px', flexShrink: 0, fontSize: '1.2rem' }}>{loading ? '...' : '­ƒöì'}</button>
+             </div>
+             {loading && !quotes.length && <LoadingSpinner />}
+             {error && <ErrorMessage message={error} />}
+@@ -2789,10 +5316,10 @@ Gere exatamente mais TR├èS par├ígrafos detalhados ampliando essa ilustra├º├úo, c
+ 
+     return (
+         <div className="tab-content">
+-            <h2>Busca de Ilustra├º├Áes</h2>
++
+             <div className="form-group">
+                 <input type="text" value={theme} onChange={e => setTheme(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch('not├¡cias', null, false)} placeholder="Ex: Perd├úo, F├®" />
+-                <button onClick={() => handleSearch('not├¡cias', null, false)} disabled={loading}>{loading ? 'Buscando...' : 'Buscar'}</button>
++                <button onClick={() => handleSearch('not├¡cias', null, false)} disabled={loading} style={{ padding: '8px 12px', flexShrink: 0, fontSize: '1.2rem' }}>{loading ? '...' : '­ƒöì'}</button>
+             </div>
+             {loading && !illustrations.length && <LoadingSpinner />}
+             {error && <ErrorMessage message={error} />}
+@@ -2837,881 +5364,510 @@ Gere exatamente mais TR├èS par├ígrafos detalhados ampliando essa ilustra├º├úo, c
+ };
+ 
+ 
+-const ConstrucaoView = () => {
+-    const [form, setForm] = useState({});
+-    const [result, setResult] = useState('');
+-    const [loading, setLoading] = useState(false);
+-    const [error, setError] = useState('');
+-
+-    useEffect(() => {
+-        const appendField = (field, text) => {
+-            setForm(prev => {
+-                const current = prev[field] || '';
+-                return { ...prev, [field]: current ? current + '\n\n' + text : text };
+-            });
+-        };
+-
+-        const handlerTema = (e) => { if (e.detail) setForm(prev => ({ ...prev, temaCentral: e.detail })); };
+-        const handlerPensamentos = (e) => { if (e.detail) appendField('pensamentos', e.detail); };
+-        const handlerIlustracao = (e) => { if (e.detail) appendField('ilustracao', e.detail); };
+-        const handlerApresentacao = (e) => { if (e.detail) appendField('apresentacaoCapitulo', e.detail); };
+-        const handlerHistorica = (e) => { if (e.detail) appendField('infoHistorica', e.detail); };
+-        const handlerPalavras = (e) => { if (e.detail) appendField('palavrasChave', e.detail); };
+-        const handlerTeologica = (e) => { if (e.detail) appendField('expressoesTeologicas', e.detail); };
+-        const handlerAplicacao = (e) => { if (e.detail) appendField('aplicacoes', e.detail); };
+-
+-        window.addEventListener('add-construction', handlerTema);
+-        window.addEventListener('add-construction-pensamentos', handlerPensamentos);
+-        window.addEventListener('add-construction-ilustracao', handlerIlustracao);
+-        window.addEventListener('add-construction-apresentacao', handlerApresentacao);
+-        window.addEventListener('add-construction-historica', handlerHistorica);
+-        window.addEventListener('add-construction-palavras', handlerPalavras);
+-        window.addEventListener('add-construction-teologica', handlerTeologica);
+-        window.addEventListener('add-construction-aplicacao', handlerAplicacao);
+-
+-        return () => {
+-            window.removeEventListener('add-construction', handlerTema);
+-            window.removeEventListener('add-construction-pensamentos', handlerPensamentos);
+-            window.removeEventListener('add-construction-ilustracao', handlerIlustracao);
+-            window.removeEventListener('add-construction-apresentacao', handlerApresentacao);
+-            window.removeEventListener('add-construction-historica', handlerHistorica);
+-            window.removeEventListener('add-construction-palavras', handlerPalavras);
+-            window.removeEventListener('add-construction-teologica', handlerTeologica);
+-            window.removeEventListener('add-construction-aplicacao', handlerAplicacao);
+-        };
+-    }, []);
+ 
+-    const handleChange = (e) => setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+ 
+-    const handleBuild = useCallback(async () => {
+-        setLoading(true);
+-        setError('');
+-        setResult('');
+-        try {
+-            const prompt = `Persona: Voc├¬ ├® um Educador Emp├ítico e mentor teol├│gico. Seu tom ├® o de um professor que guia seus alunos com sabedoria, sendo instrutivo mas nunca autorit├írio. Voc├¬ faz pesquisas sobre cap├¡tulos da B├¡blia com rigor intelectual e fluidez narrativa.
+ 
+-Projeto: A partir das informa├º├Áes postadas ser├í constru├¡do um texto completo no final. Formate qualquer trecho de texto citado que estiver entre aspas em negrito utilizando os asteriscos do markdown (exemplo: **"texto aspeado"**).
+ 
+-ESTRUTURA DO TEXTO:
+-A) Inicie o texto com o pensamento inserido na caixa PENSAMENTOS. A apresenta├º├úo dever├í ser feita atrav├®s de duas frases. A primeira frase deve apresentar a autoria e a segunda o pensamento citado de forma integral entre aspas. Use como base o exemplo a seguir: o te├│logo (qualifica├º├úo do autor, que pode ser escritor, pol├¡tico, fil├│sofo...) Jo├úo (nome do autor) ├® autor de um interessante pensamento que declara. 
+-(caso n├úo tenha sido selecionado nenhum pensamento, v├í para o pr├│ximo item). 
+ 
+-C) escreva de dois a tr├¬s par├ígrafos contendo a ILUSTRA├ç├âO postada na caixa ILUSTRA├ç├âO. Ao iniciar esta se├º├úo, use a primeira frase para conectar o assunto da ilustra├º├úo com o conte├║do do par├ígrafo anterior (caso n├úo tenha sido selecionada nenhuma ilustra├º├úo, v├í para o pr├│ximo item). 
+ 
+-D) escreva um breve par├ígrafo de transi├º├úo entre os elementos da introdu├º├úo com a se├º├úo do desenvolvimento.
++// Helper: flat list of all books
++const ALL_BOOKS = Object.values(NAA_BOOKS).flat();
+ 
+-E) S├¡ntese do cap├¡tulo: Escreva um par├ígrafo de apresenta├º├úo do contexto geral do cap├¡tulo do texto b├¡blico usando as informa├º├Áes descritas na caixa APRESENTA├ç├âO DO CAP├ìTULO (caso a caixa esteja vazia, escreva um par├ígrafo de apresenta├º├úo baseado no TEMA CENTRAL).
+ 
+-F) Escreva uma breve par├ígrafo conectando a s├¡ntese do cap├¡tulo com o conte├║do do(s) vers├¡culo(s) que ser├úo citados no pr├│ximo passo.
+ 
+-G) Escreva uma frase de apresenta├º├úo do texto b├¡blico baseando-se no exemplo a seguir: - Veja o que diz o verso X do cap├¡tulo X do livro X. (Se o texto b├¡blico for composto por mais de um vers├¡culo, escreva a frase no plural: Veja o que que os versos X do cap├¡tulo X do livro X.)
+-- Ap├│s a frase de apresenta├º├úo, terminada com dois pontos (:), coloque na ├¡ntegra na linha debaixo o TB (texto b├¡blico), que foi colocado na caixa do TEMA CENTRAL. 
+-- A apresenta├º├úo do texto b├¡blico dever├í ser entre aspas.
+-- Ao final do texto b├¡blico coloque a refer├¬ncia entre par├¬nteses colocando o nome do livro, o cap├¡tulo e o(s) vers├¡culo(s). Exemplo: (2 Reis 24:1)
+ 
+-H) Explica├º├úo do texto: Inicie com uma frase conectando esta se├º├úo com o texto b├¡blico citado anteriormente. Em seguida, dedique v├írios par├ígrafos para explorar o texto b├¡blico desenvolvendo as informa├º├Áes postadas nas caixas INFORMA├ç├òES HIST├ôRICAS, PALAVRAS-CHAVE e EXPRESS├òES TEOL├ôGICAS. Sempre use frases de conex├úo entre os elementos, para que todos pare├ºam coesos.
++// --- Main App Component ---
+ 
+-I) Conclus├úo: Escreva dois par├ígrafos que fechem o texto de forma coerente, conectando as informa├º├Áes anteriores com as sugest├Áes presentes na se├º├úo APLICA├ç├òES.
+-Termine o ├║ltimo par├ígrafo com um Arremate Po├®tico: use uma m├íxima ou frase de efeito que sirva como "├óncora" para a mem├│ria do leitor.
+ 
+-ESTILO DE ESCRITA OBRIGAT├ôRIO:
+-- Tom de Educador Emp├ítico: O tom ├® de um mentor. ├ë instrutivo, mas n├úo autorit├írio.
+-- Racioc├¡nio L├│gico: Use conectivos que demonstrem causa e consequ├¬ncia (ex: "Desta forma...", "Por isso...", "Perceba que...", "Como resultado...").
+-- Interpela├º├úo do Leitor: Fa├ºa perguntas ret├│ricas frequentes para engajar quem l├¬ (ex: "Voc├¬ j├í ouviu falar...?", "Qual o maior presente...?", "Como isso se aplica a n├│s hoje?").
+-- Tom Did├ítico-Persuasivo: O texto n├úo busca apenas informar, mas transformar o comportamento atrav├®s da l├│gica. Enfatize a responsabilidade individual, mostrando que as escolhas geram frutos inevit├íveis.
+-- Voz Ativa e Assertiva: Use frases curtas e diretas, evitando ambiguidades e mantendo um ritmo constante de leitura.
+-- Eleg├óncia Formal: Mantenha a eleg├óncia sem ser excessivamente erudito. Evite jarg├Áes religiosos excessivos ou clich├¬s sem explica├º├úo. 
+-- Restri├º├úo: N├âO use uma linguagem infantil ou excessivamente simplista. O texto deve ser acess├¡vel tanto para acad├¬micos quanto para o leitor comum.
+ 
+-INFORMA├ç├òES INSERIDAS:
+-- TEMA CENTRAL: ${form.temaCentral || 'N├úo informado'}
+-- APRESENTA├ç├âO DO CAP├ìTULO: ${form.apresentacaoCapitulo || 'N├úo informado'}
+-- PENSAMENTOS: ${form.pensamentos || 'N├úo informado'}
+-- ILUSTRA├ç├âO: ${form.ilustracao || 'N├úo informado'}
+-- INFORMA├ç├òES HIST├ôRICAS: ${form.infoHistorica || 'N├úo informado'}
+-- PALAVRAS-CHAVE: ${form.palavrasChave || 'N├úo informado'}
+-- EXPRESS├òES TEOL├ôGICAS: ${form.expressoesTeologicas || 'N├úo informado'}
+-- APLICA├ç├òES: ${form.aplicacoes || 'N├úo informado'}
+-            `;
++const LeftSidebar = ({ selectedBook, setSelectedBook, selectedChapter, setSelectedChapter, selectedVerse, setSelectedVerse }) => {
++    const allBooks = Object.values(BIBLIA_STRUCTURE).flatMap(t => t.col1.concat(t.col2 || []).filter(Boolean));
++    const [searchTerm, setSearchTerm] = useState('');
++    const filteredBooks = searchTerm ? allBooks.filter(b => b.name.toLowerCase().includes(searchTerm.toLowerCase())) : allBooks;
+ 
+-            const responseText = await generateAIContent({ prompt });
+-            setResult(responseText);
+-        } catch (e) {
+-            setError(formatGeminiError(e, 'Falha ao construir o texto.'));
+-        } finally {
+-            setLoading(false);
+-        }
+-    }, [form]);
++    const handleSelectBook = (book) => {
++        setSelectedBook(book);
++        setSelectedChapter(null);
++        setSelectedVerse(null);
++    };
+ 
+     return (
+-        <div className="tab-content">
+-            <h2>Constru├º├úo de Texto Devocional</h2>
+-            <div className="grid-form">
+-                <div className="form-section full-span">
+-                    <h3>TEMA CENTRAL</h3>
+-                    <textarea name="temaCentral" value={form.temaCentral || ''} onChange={handleChange} placeholder="Insira o tema e o texto b├¡blico..." />
+-                </div>
+-                <div className="form-section full-span">
+-                    <h3>APRESENTA├ç├âO DO CAP├ìTULO</h3>
+-                    <textarea name="apresentacaoCapitulo" value={form.apresentacaoCapitulo || ''} onChange={handleChange} placeholder="Apresenta├º├úo do cap├¡tulo..." />
+-                </div>
+-                <div className="form-section full-span">
+-                    <h3>PENSAMENTOS</h3>
+-                    <textarea name="pensamentos" value={form.pensamentos || ''} onChange={handleChange} placeholder="Pensamento interessante com refer├¬ncia (Autor e Obra)..." />
+-                </div>
+-                <div className="form-section full-span">
+-                    <h3>ILUSTRA├ç├âO</h3>
+-                    <textarea name="ilustracao" value={form.ilustracao || ''} onChange={handleChange} placeholder="Ilustra├º├úo conectada ao tema..." />
+-                </div>
+-                <div className="form-section full-span">
+-                    <h3>INFORMA├ç├òES HIST├ôRICAS</h3>
+-                    <textarea name="infoHistorica" value={form.infoHistorica || ''} onChange={handleChange} placeholder="Contexto hist├│rico e cultural da ├®poca..." />
+-                </div>
+-                <div className="form-section full-span">
+-                    <h3>PALAVRAS-CHAVE</h3>
+-                    <textarea name="palavrasChave" value={form.palavrasChave || ''} onChange={handleChange} placeholder="Termos originais (hebraico, aramaico ou grego) de curiosidade teol├│gica..." />
+-                </div>
+-                <div className="form-section full-span">
+-                    <h3>EXPRESS├òES TEOL├ôGICAS</h3>
+-                    <textarea name="expressoesTeologicas" value={form.expressoesTeologicas || ''} onChange={handleChange} placeholder="Express├Áes ou frases com peso teol├│gico..." />
+-                </div>
+-                <div className="form-section full-span">
+-                    <h3>APLICA├ç├òES</h3>
+-                    <textarea name="aplicacoes" value={form.aplicacoes || ''} onChange={handleChange} placeholder="Aplica├º├Áes pr├íticas (Atitudes, encorajamento, exemplos)..." />
++        <>
++            <div style={{ padding: '0.2rem' }}>
++                <input 
++                    type="text" 
++                    placeholder="Busca ex: Gen 1" 
++                    value={searchTerm}
++                    onChange={(e) => setSearchTerm(e.target.value)}
++                    style={{ marginBottom: '0.5rem', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc', width: '100%' }}
++                />
++            </div>
++            <div className="selection-box" style={{ flexGrow: 1 }}>
++                <h3>LIVRO</h3>
++                <div className="book-list">
++                    {filteredBooks.map(book => (
++                        <div 
++                            key={book.name} 
++                            className={`book-item ${selectedBook?.name === book.name ? 'active' : ''}`}
++                            onClick={() => handleSelectBook(book)}
++                        >
++                            {book.name}
++                        </div>
++                    ))}
+                 </div>
+             </div>
+-            <button onClick={handleBuild} disabled={loading} className="full-width-button">{loading ? 'Construindo...' : 'Construir Texto'}</button>
+-            {loading && <LoadingSpinner />}
+-            {error && <ErrorMessage message={error} />}
+-            {result && (
+-                <div className="card">
+-                    <h3>Texto Devocional Gerado</h3>
+-                    {result.split(/\n+/).filter(p => p.trim() !== '').map((p, i) => <p key={i} style={{ fontFamily: 'Arial', fontSize: '16px', lineHeight: '1.5', marginBottom: '1rem' }}>{parseBold(p)}</p>)}
+-                    <div className="quote-actions" style={{ justifyContent: 'flex-end' }}>
+-                        <button onClick={() => navigator.clipboard.writeText(result)}>Copiar</button>
++            <div className="selection-box" style={{ flexGrow: 1 }}>
++                    <h3>CAP├ìTULO</h3>
++                    <div className="number-grid">
++                        {selectedBook && Array.from({ length: selectedBook.chapters }, (_, i) => i + 1).map(num => (
++                            <div 
++                                key={num}
++                                className={`number-btn ${selectedChapter === num ? 'active' : ''}`}
++                                onClick={() => { setSelectedChapter(num); setSelectedVerse(null); }}
++                            >
++                                {num}
++                            </div>
++                        ))}
+                     </div>
+                 </div>
+-            )}
+-        </div>
++            <div className="selection-box" style={{ flexGrow: 1 }}>
++                    <h3>VERS├ìCULO</h3>
++                    <div className="number-grid">
++                        {selectedChapter && selectedBook && Array.from({ length: 50 }, (_, i) => i + 1).map(num => (
++                            <div 
++                                key={num}
++                                className={`number-btn ${selectedVerse === num ? 'active' : ''}`}
++                                onClick={() => setSelectedVerse(num)}
++                            >
++                                {num}
++                            </div>
++                        ))}
++                    </div>
++                </div>
++        </>
+     );
+ };
+ 
+ 
+-const ChatView = () => {
+-    const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; text: string; id: string }[]>(() => {
+-        const saved = localStorage.getItem('chat_messages');
+-        return saved ? JSON.parse(saved) : [];
+-    });
+-    const [input, setInput] = useState('');
++const CenterContent = ({ selectedBook, selectedChapter, selectedVerse }) => {
++    const [verses, setVerses] = useState([]);
++    const [bhsWordsByVerse, setBhsWordsByVerse] = useState({});
+     const [loading, setLoading] = useState(false);
+-    const [error, setError] = useState('');
+-    const messagesEndRef = React.useRef<HTMLDivElement>(null);
+-
++    const [activeTab, setActiveTab] = useState('Cap├¡tulo');
++    
++    // Commentaries State
++    const [comentarios, setComentarios] = useState([]);
++    const [loadingComentarios, setLoadingComentarios] = useState(false);
++    const [selectedCommentaries, setSelectedCommentaries] = useState({ 'Todos': true });
++
++    // Deep Analysis State for NAA
++    const [selectedVerseWordIndex, setSelectedVerseWordIndex] = useState(null); // format: "verseNum-wordIndex"
++    const [verseWordDeepAnalysis, setVerseWordDeepAnalysis] = useState({});
++    const [deepAnalysisModalOpen, setDeepAnalysisModalOpen] = useState(false);
++    const [currentDeepAnalysis, setCurrentDeepAnalysis] = useState(null);
++
++    // Interlinear State for BHS
++    const [selectedBhsWord, setSelectedBhsWord] = useState(null);
++
++    const externalRefChapter = (selectedBook && selectedChapter) ? `${selectedBook.map || selectedBook.name} ${selectedChapter}` : '';
++    const externalRefVerse = (selectedBook && selectedChapter && selectedVerse) ? `${selectedBook.map || selectedBook.name} ${selectedChapter}:${selectedVerse}` : '';
++    
++    // Reset selections on ref change
+     useEffect(() => {
+-        localStorage.setItem('chat_messages', JSON.stringify(messages));
+-    }, [messages]);
++        setSelectedVerseWordIndex(null);
++        setVerseWordDeepAnalysis({});
++        setDeepAnalysisModalOpen(false);
++        setCurrentDeepAnalysis(null);
++        setSelectedBhsWord(null);
++    }, [externalRefChapter, externalRefVerse]);
+ 
+     useEffect(() => {
+-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+-    }, [messages, loading]);
+-
+-    const handleSend = async () => {
+-        if (!input.trim() || loading) return;
+-        const userText = input.trim();
+-        setInput('');
+-        setError('');
+-        
+-        const userMsg = { role: 'user' as const, text: userText, id: Math.random().toString(36) };
+-        setMessages(prev => [...prev, userMsg]);
+-        setLoading(true);
+-
+-        try {
+-            let conversationPrompt = "Voc├¬ ├® um assistente de IA prestativo e inteligente. Responda ├á mensagem do usu├írio de forma clara e objetiva.\n\n";
+-            const history = messages.slice(-6);
+-            history.forEach(msg => {
+-                conversationPrompt += `${msg.role === 'user' ? 'Usu├írio' : 'Assistente'}: ${msg.text}\n\n`;
+-            });
+-            conversationPrompt += `Usu├írio: ${userText}\n\nAssistente:`;
+-
+-            const responseText = await generateAIContent({ prompt: conversationPrompt });
+-            const assistantMsg = { role: 'assistant' as const, text: responseText, id: Math.random().toString(36) };
+-            setMessages(prev => [...prev, assistantMsg]);
+-        } catch (e) {
+-            setError(formatGeminiError(e, 'Erro ao enviar mensagem.'));
+-        } finally {
+-            setLoading(false);
+-        }
+-    };
+-
+-    const handleClear = () => {
+-        if (window.confirm('Deseja realmente limpar o hist├│rico do chat?')) {
+-            setMessages([]);
+-            localStorage.removeItem('chat_messages');
+-        }
+-    };
+-
+-    return (
+-        <div className="tab-content">
+-            <h2>Chat com a IA</h2>
+-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+-                <span style={{ fontSize: '0.9rem', color: 'var(--text-light)' }}>
+-                    Conectado ├á IA selecionada nas configura├º├Áes globais.
+-                </span>
+-                <button onClick={handleClear} style={{ backgroundColor: '#e0e0e0', color: 'var(--text-color)', fontSize: '0.8rem', padding: '0.5rem 1rem' }}>
+-                    Limpar Chat
+-                </button>
+-            </div>
+-            
+-            <div style={{ 
+-                border: '1px solid var(--border-color)', 
+-                borderRadius: '8px', 
+-                padding: '1rem', 
+-                height: '400px', 
+-                overflowY: 'auto', 
+-                backgroundColor: '#fafafa',
+-                marginBottom: '1rem',
+-                display: 'flex',
+-                flexDirection: 'column',
+-                gap: '0.75rem'
+-            }}>
+-                {messages.length === 0 && (
+-                    <div style={{ textAlign: 'center', color: 'var(--text-light)', marginTop: '8rem' }}>
+-                        Nenhuma mensagem enviada. Digite algo abaixo para conversar com a IA!
+-                    </div>
+-                )}
+-                {messages.map(msg => (
+-                    <div key={msg.id} style={{ 
+-                        alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+-                        maxWidth: '80%',
+-                        backgroundColor: msg.role === 'user' ? 'var(--primary-color)' : '#eeeeee',
+-                        color: msg.role === 'user' ? 'white' : 'var(--text-color)',
+-                        padding: '0.75rem 1rem',
+-                        borderRadius: msg.role === 'user' ? '12px 12px 0 12px' : '12px 12px 12px 0',
+-                        boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+-                        position: 'relative'
+-                    }}>
+-                        <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.95rem', lineHeight: '1.4' }}>
+-                            {msg.role === 'user' ? msg.text : parseBold(msg.text)}
+-                        </div>
+-                        {msg.role === 'assistant' && (
+-                            <div className="quote-actions" style={{ 
+-                                marginTop: '0.5rem', 
+-                                borderTop: '1px solid #ddd', 
+-                                paddingTop: '0.5rem',
+-                                justifyContent: 'flex-end',
+-                                gap: '8px',
+-                                display: 'flex'
+-                            }}>
+-                                <button 
+-                                    onClick={() => navigator.clipboard.writeText(msg.text)}
+-                                    style={{ padding: '2px 8px', fontSize: '0.7rem', backgroundColor: '#e0e0e0', color: 'var(--text-color)', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+-                                >
+-                                    Copiar
+-                                </button>
+-                                <button 
+-                                    onClick={(e) => handleAddClick(e, 'add-construction-ilustracao', msg.text)}
+-                                    style={{ padding: '2px 8px', fontSize: '0.7rem', backgroundColor: '#e0e0e0', color: 'var(--text-color)', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+-                                >
+-                                    Adicionar na Constru├º├úo
+-                                </button>
+-                            </div>
+-                        )}
+-                    </div>
+-                ))}
+-                {loading && <LoadingSpinner />}
+-                {error && <ErrorMessage message={error} />}
+-                <div ref={messagesEndRef} />
+-            </div>
+-
+-            <div className="form-group" style={{ display: 'flex', gap: '0.5rem' }}>
+-                <input 
+-                    type="text" 
+-                    value={input} 
+-                    onChange={e => setInput(e.target.value)} 
+-                    onKeyDown={e => e.key === 'Enter' && handleSend()} 
+-                    placeholder="Fa├ºa uma pergunta ou pe├ºa algo para a IA..." 
+-                    disabled={loading}
+-                    style={{ flexGrow: 1 }}
+-                />
+-                <button onClick={handleSend} disabled={loading}>{loading ? 'Enviando...' : 'Enviar'}</button>
+-            </div>
+-        </div>
+-    );
+-};
+-
+-
+-// Helper: flat list of all books
+-const ALL_BOOKS = Object.values(NAA_BOOKS).flat();
+-
+-const ImportarView = () => {
+-    // --- Browser State ---
+-    const [browseBook, setBrowseBook] = useState<any>(null);
+-    const [browseChapter, setBrowseChapter] = useState<number | null>(null);
+-    const [browseVerse, setBrowseVerse] = useState<number | null>(null);
+-    const [browseCommentaries, setBrowseCommentaries] = useState<any[]>([]);
+-    const [openCommentaryId, setOpenCommentaryId] = useState<Record<string, boolean>>({});
+-    const [browseLoading, setBrowseLoading] = useState(false);
+-    const [browseError, setBrowseError] = useState('');
+-
+-    // --- Anexar Modal State ---
+-    const [showAnexarModal, setShowAnexarModal] = useState(false);
+-    const [formAuthor, setFormAuthor] = useState('');
+-    const [formBook, setFormBook] = useState(ALL_BOOKS[0]?.name || '');
+-    const [formChapter, setFormChapter] = useState(1);
+-    const [formVerse, setFormVerse] = useState('');
+-    const [formText, setFormText] = useState('');
+-    const [formSaving, setFormSaving] = useState(false);
+-    const [formError, setFormError] = useState('');
+-    const [formSuccess, setFormSuccess] = useState('');
+-
+-    // --- Escanear (PDF) State ---
+-    const [scanLoading, setScanLoading] = useState(false);
+-    const [scanError, setScanError] = useState('');
+-    const [scanAuthor, setScanAuthor] = useState('');
+-    const [scanProgress, setScanProgress] = useState({ current: 0, total: 0 });
+-    const [parsedCommentaries, setParsedCommentaries] = useState<any[]>([]);
+-    const [saving, setSaving] = useState(false);
+-    const [saveError, setSaveError] = useState('');
+-    const [saveSuccess, setSaveSuccess] = useState('');
+-
+-    // --- Browse Logic ---
+-    const loadBrowseCommentaries = async (book: any, chapter: number, verse: number | null = browseVerse) => {
+-        if (!isSupabaseConfigured()) { setBrowseError('Supabase n├úo configurado.'); return; }
+-        setBrowseLoading(true);
+-        setBrowseError('');
+-        setBrowseCommentaries([]);
+-        setOpenCommentaryId({});
+-        try {
+-            let query = supabase
+-                .from('commentaries')
+-                .select('*')
+-                .eq('book', book.name)
+-                .eq('chapter', chapter);
+-
+-            if (verse !== null) {
+-                query = query.eq('verse', verse);
+-            }
+-
+-            const { data, error } = await query.order('verse', { ascending: true, nullsFirst: true });
+-            if (error) throw error;
+-            setBrowseCommentaries(data || []);
+-        } catch (e: any) {
+-            setBrowseError(`Erro ao buscar coment├írios: ${e.message || e}`);
+-        } finally {
+-            setBrowseLoading(false);
++        if (!externalRefChapter) {
++            setVerses([]);
++            setBhsWordsByVerse({});
++            return;
+         }
+-    };
+-
+-    const handleBrowseBook = (book: any) => {
+-        setBrowseBook(book);
+-        setBrowseChapter(null);
+-        setBrowseVerse(null);
+-        setBrowseCommentaries([]);
+-        setBrowseError('');
+-    };
++        
++        const fetchContent = async () => {
++            setLoading(true);
++            try {
++                // Fetch NAA Text
++                const text = await getBibleTextFromRef(externalRefVerse || externalRefChapter);
++                const versesArray = [];
++                if (text && !text.startsWith("Cap├¡tulo n├úo encontrado")) {
++                    // Extract verses
++                    const lines = text.split(/\r?\n/).filter(l => l.trim());
++                    for (const line of lines) {
++                        const match = line.trim().match(/^\*\*(\d+)\*\*\s*(.*)$/);
++                        if (match) {
++                            versesArray.push({ num: parseInt(match[1], 10), text: match[2] });
++                        } else if (versesArray.length === 0 && line.trim()) {
++                            // Single verse without number, assume 1 or selectedVerse
++                            versesArray.push({ num: selectedVerse || 1, text: line.trim() });
++                        }
++                    }
++                }
++                setVerses(versesArray);
+ 
+-    const handleBrowseChapter = (ch: number) => {
+-        setBrowseChapter(ch);
+-        setBrowseVerse(null);
+-        if (browseBook) loadBrowseCommentaries(browseBook, ch, null);
+-    };
++                // Fetch BHS Text for the chapter
++                const match = externalRefChapter.match(/^(.+?)\s+(\d+)/);
++                if (match) {
++                    const bookName = match[1].trim();
++                    const chapterNum = parseInt(match[2], 10);
++                    const bookIdx = getHebrewBookIndex(bookName);
++                    if (bookIdx !== -1) {
++                        const response = await fetch(`/api/hebrew-bible?book=${bookIdx + 1}&chapter=${chapterNum}`);
++                        if (response.ok) {
++                            const json = await response.json();
++                            const words = json.data || [];
++                            const map = {};
++                            words.forEach(w => {
++                                if (!map[w.verse]) map[w.verse] = [];
++                                map[w.verse].push(w);
++                            });
++                            // If user selected a specific verse, filter the map to only contain that verse
++                            if (selectedVerse) {
++                                setBhsWordsByVerse({ [selectedVerse]: map[selectedVerse] || [] });
++                            } else {
++                                setBhsWordsByVerse(map);
++                            }
++                        } else {
++                            setBhsWordsByVerse({});
++                        }
++                    } else {
++                         setBhsWordsByVerse({});
++                    }
++                }
++            } catch (e) {
++                console.error(e);
++            } finally {
++                setLoading(false);
++            }
++        };
++        fetchContent();
++    }, [externalRefChapter, externalRefVerse]);
+ 
+-    const handleBrowseVerse = (v: number | null) => {
+-        setBrowseVerse(v);
+-        if (browseBook && browseChapter) {
+-            loadBrowseCommentaries(browseBook, browseChapter, v);
++    // Handle Commentaries Tab activation
++    useEffect(() => {
++        if (activeTab === 'Coment├írios' && externalRefChapter) {
++            const fetchComments = async () => {
++                setLoadingComentarios(true);
++                try {
++                    const targetRefForDb = (selectedBook && selectedChapter) ? `${selectedBook.name} ${selectedChapter}${selectedVerse ? ':'+selectedVerse : ''}` : (externalRefVerse || externalRefChapter);
++                    const res = await fetchCommentaries(targetRefForDb);
++                    setComentarios(res);
++                    // Reset checkboxes
++                    setSelectedCommentaries({ 'Todos': true });
++                } catch (e) {
++                    console.error('Erro ao buscar coment├írios', e);
++                } finally {
++                    setLoadingComentarios(false);
++                }
++            };
++            fetchComments();
+         }
+-    };
+-
+-    // --- Anexar Modal Logic ---
+-    const selectedBookObj = ALL_BOOKS.find(b => b.name === formBook) || ALL_BOOKS[0];
+-    const formBookChapters = selectedBookObj?.chapters || 1;
++    }, [activeTab, externalRefChapter, externalRefVerse]);
+ 
+-    const handleAnexarSave = async () => {
+-        if (!formAuthor.trim() || !formText.trim()) {
+-            setFormError('Preencha pelo menos Autor e Texto.'); return;
++    const handleCommentaryCheck = (author) => {
++        if (author === 'Todos') {
++            setSelectedCommentaries({ 'Todos': true });
++        } else {
++            setSelectedCommentaries(prev => {
++                const next = { ...prev, [author]: !prev[author] };
++                if (next['Todos']) next['Todos'] = false;
++                // Se tudo desmarcado, marca Todos automaticamente? (Op├º├úo de design)
++                const anyChecked = Object.keys(next).some(k => k !== 'Todos' && next[k]);
++                if (!anyChecked) next['Todos'] = true;
++                return next;
++            });
+         }
+-        setFormSaving(true); setFormError(''); setFormSuccess('');
+-        try {
+-            const { error: err } = await supabase.from('commentaries').insert([{
+-                author: formAuthor.trim(),
+-                book: formBook,
+-                chapter: formChapter,
+-                verse: formVerse ? parseInt(formVerse, 10) : null,
+-                text: formText.trim()
+-            }]);
+-            if (err) throw err;
+-            setFormSuccess('Coment├írio adicionado com sucesso!');
+-            setFormText(''); setFormVerse(''); setFormAuthor('');
+-            // Reload browse if same passage
+-            if (browseBook?.name === formBook && browseChapter === formChapter) {
+-                loadBrowseCommentaries(browseBook, formChapter);
+-            }
+-            setTimeout(() => { setShowAnexarModal(false); setFormSuccess(''); }, 1500);
+-        } catch (e: any) {
+-            setFormError(`Erro: ${e.message || e}`);
+-        } finally { setFormSaving(false); }
+-    };
+-
+-    // --- PDF Scan Logic ---
+-    const loadPdfJs = (): Promise<any> => {
+-        return new Promise((resolve, reject) => {
+-            if ((window as any).pdfjsLib) { resolve((window as any).pdfjsLib); return; }
+-            const script = document.createElement('script');
+-            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+-            script.onload = () => {
+-                const lib = (window as any).pdfjsLib;
+-                lib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+-                resolve(lib);
+-            };
+-            script.onerror = () => reject(new Error('Falha ao carregar PDF.js'));
+-            document.head.appendChild(script);
+-        });
+     };
+ 
+-    const handleScanPdf = async (e: React.ChangeEvent<HTMLInputElement>) => {
+-        const file = e.target.files?.[0];
+-        e.target.value = '';
+-        if (!file) return;
+-        if (!scanAuthor.trim()) { setScanError('Defina o autor antes de escanear.'); return; }
++    const handleVerseWordDeepAnalysis = async (verseNum, wordIndex, wordText) => {
++        setSelectedVerseWordIndex(null);
++        const cleanWord = wordText.replace(/[.,;!?()]/g, '').trim();
++        const targetRef = `${selectedBook.map || selectedBook.name} ${selectedChapter}:${verseNum}`;
++        
++        setDeepAnalysisModalOpen(true);
++        setCurrentDeepAnalysis({ loading: true, word: cleanWord });
+ 
+-        setScanLoading(true); setScanError(''); setParsedCommentaries([]);
+-        setScanProgress({ current: 0, total: 0 });
+         try {
+-            const pdfjsLib = await loadPdfJs();
+-            const arrayBuffer = await file.arrayBuffer();
+-            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+-
+-            // 1. Extract ALL pages
+-            let fullText = '';
+-            for (let p = 1; p <= pdf.numPages; p++) {
+-                const page = await pdf.getPage(p);
+-                const content = await page.getTextContent();
+-                fullText += content.items.map((i: any) => i.str).join(' ') + '\n';
+-            }
+-
+-            // 2. Split into ~4000-word chunks (safe for Ollama context)
+-            const CHUNK_WORDS = 4000;
+-            const words = fullText.split(/\s+/);
+-            const chunks: string[] = [];
+-            for (let i = 0; i < words.length; i += CHUNK_WORDS) {
+-                chunks.push(words.slice(i, i + CHUNK_WORDS).join(' '));
+-            }
+-
+-            setScanProgress({ current: 0, total: chunks.length });
+-
+-            // 3. Process each chunk sequentially, accumulate results
+-            const allCommentaries: any[] = [];
+-            for (let idx = 0; idx < chunks.length; idx++) {
+-                setScanProgress({ current: idx + 1, total: chunks.length });
+-                const chunk = chunks[idx];
+-
+-                const prompt = `Voc├¬ ├® um analisador de coment├írios b├¡blicos. Leia o trecho abaixo (parte ${idx + 1} de ${chunks.length} de um documento maior) e extraia APENAS os coment├írios sobre passagens b├¡blicas espec├¡ficas que estejam NESTE trecho.
+-Para cada passagem encontrada, retorne: o Livro (em portugu├¬s, por extenso), o Cap├¡tulo (n├║mero), o Vers├¡culo (n├║mero ou null se for sobre o cap├¡tulo inteiro), e o Texto do coment├írio.
+-Use o autor "${scanAuthor}" para todos os registros.
+-Se n├úo houver nenhuma passagem b├¡blica neste trecho, retorne um array vazio [].
+-
+-Trecho do PDF:
+-"""
+-${chunk}
+-"""
+-
+-Responda APENAS em JSON com um array de objetos com as chaves: "author", "book", "chapter", "verse", "text". Sem markdown, sem explica├º├Áes, apenas JSON puro.`;
++            const prompt = `Fa├ºa uma an├ílise profunda da palavra "${cleanWord}" no contexto do vers├¡culo ${targetRef}. 
++Siga estritamente estes 6 passos de an├ílise. Retorne um JSON contendo a palavra original (em hebraico/aramaico/grego), sua translitera├º├úo, como ela aparece na tradu├º├úo em portugu├¬s, e um array de objetos "passos", onde cada objeto representa um passo com "titulo" e "conteudo".
++Passos obrigat├│rios:
++A) An├ílise Morfol├│gica (A Estrutura) - Foque na forma, estrutura e etiquetas gramaticais.
++B) An├ílise Sint├ítica (A Rela├º├úo) - Como a palavra se conecta na frase, sujeito, predicado, etc.
++C) An├ílise Sem├óntica (O Significado) - Significado no contexto cultural, hist├│rico e liter├írio.
++D) An├ílise Etimol├│gica (A Origem) - Raiz da palavra e sua forma├º├úo hist├│rica.
++E) An├ílise de Contexto Liter├írio e Hist├│rico - Cultura e g├¬nero liter├írio que a envolve.
++F) An├ílise Teol├│gica - Como se encaixa no plano geral da B├¡blia e conex├Áes doutrin├írias.`;
+ 
+-                try {
+-                    const responseText = await generateAIContent({ prompt, isJson: true });
+-                    const parsed = parseAIJsonArray(responseText);
+-                    allCommentaries.push(...parsed.map((item: any) => ({
+-                        ...item,
+-                        id: Math.random().toString(36)
+-                    })));
+-                    // Update table incrementally so user can see progress
+-                    setParsedCommentaries([...allCommentaries]);
+-                } catch (chunkErr: any) {
+-                    // Don't abort ÔÇö log error for this chunk and continue
+-                    console.warn(`Erro no segmento ${idx + 1}:`, chunkErr);
++            const responseText = await generateAIContent({
++                prompt,
++                isJson: true,
++                config: {
++                    responseMimeType: "application/json",
++                    responseSchema: {
++                        type: Type.OBJECT,
++                        properties: {
++                            palavraOriginal: { type: Type.STRING },
++                            transliteracao: { type: Type.STRING },
++                            palavraNoVersiculo: { type: Type.STRING },
++                            passos: {
++                                type: Type.ARRAY,
++                                items: {
++                                    type: Type.OBJECT,
++                                    properties: {
++                                        titulo: { type: Type.STRING },
++                                        conteudo: { type: Type.STRING }
++                                    }
++                                }
++                            }
++                        }
++                    }
+                 }
+-            }
++            });
+ 
+-            if (allCommentaries.length === 0) {
+-                setScanError('Nenhum coment├írio b├¡blico identificado no documento. Verifique se o PDF cont├®m texto selecion├ível (n├úo ├® uma imagem escaneada).');
+-            }
+-        } catch (e: any) {
+-            setScanError(formatGeminiError(e, 'Falha ao escanear o PDF.'));
+-        } finally {
+-            setScanLoading(false);
+-            setScanProgress({ current: 0, total: 0 });
++            const cleanJson = responseText.replace(/^```json\s*/, '').replace(/```\s*$/, '').trim();
++            const parsed = JSON.parse(cleanJson);
++            setCurrentDeepAnalysis({ loading: false, result: parsed, word: cleanWord });
++        } catch (e) {
++            setCurrentDeepAnalysis({ loading: false, error: formatGeminiError(e, 'Falha ao realizar an├ílise profunda.'), word: cleanWord });
+         }
+     };
+ 
+-    const handleEditRow = (id: string, field: string, value: any) => {
+-        setParsedCommentaries(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
+-    };
+-
+-    const handleDeleteRow = (id: string) => {
+-        setParsedCommentaries(prev => prev.filter(item => item.id !== id));
+-    };
+-
+-    const handleAdicionarTabela = async () => {
+-        if (parsedCommentaries.length === 0) { setSaveError('Nenhum item na tabela para salvar.'); return; }
+-        if (!isSupabaseConfigured()) { setSaveError('Supabase n├úo configurado.'); return; }
+-        setSaving(true); setSaveError(''); setSaveSuccess('');
+-        try {
+-            const dataToInsert = parsedCommentaries.map(({ id, ...rest }) => ({
+-                author: rest.author,
+-                book: rest.book,
+-                chapter: parseInt(rest.chapter, 10),
+-                verse: rest.verse ? parseInt(rest.verse, 10) : null,
+-                text: rest.text
+-            }));
+-            const { error: err } = await supabase.from('commentaries').insert(dataToInsert);
+-            if (err) throw err;
+-            setSaveSuccess(`Ô£à ${dataToInsert.length} coment├írio(s) inseridos no Supabase com sucesso!`);
+-            setParsedCommentaries([]);
+-        } catch (e: any) {
+-            setSaveError(`Erro ao salvar: ${e.message || e}`);
+-        } finally { setSaving(false); }
+-    };
++    const displayTitle = selectedBook ? `${selectedBook.name} ${selectedChapter || ''}${selectedVerse ? ':'+selectedVerse : ''}` : 'Selecione um texto b├¡blico no painel lateral';
+ 
+-    // --- Render Helpers ---
+-    const sectionLabel = { fontWeight: 'bold' as const, fontSize: '0.75rem', color: '#0d47a1', textTransform: 'uppercase' as const, letterSpacing: '0.05em', marginBottom: '6px', display: 'block' };
+-    const panelStyle = { border: '1px solid var(--border-color)', borderRadius: '10px', padding: '1.25rem', backgroundColor: 'white', marginBottom: '1.5rem' };
++    // Get active comments
++    const activeCommentaries = comentarios.filter(c => selectedCommentaries['Todos'] || selectedCommentaries[c.author]);
++    const authors = Array.from(new Set(comentarios.map(c => c.author)));
+ 
+     return (
+-        <div className="tab-content">
+-            <h2>Obras</h2>
+-
+-            {/* ===== NAVEGADOR ===== */}
+-            <div style={panelStyle}>
+-                <h3 style={{ marginTop: 0, marginBottom: '1rem', color: '#1a237e' }}>­ƒôÜ Navegador de Coment├írios</h3>
+-
+-                <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flexGrow: 1, minWidth: '180px' }}>
+-                        <label style={sectionLabel}>Livro</label>
+-                        <select
+-                            value={browseBook?.name || ''}
+-                            onChange={e => {
+-                                const b = ALL_BOOKS.find(bk => bk.name === e.target.value);
+-                                if (b) handleBrowseBook(b);
+-                            }}
+-                            style={{ padding: '8px', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '0.9rem' }}
+-                        >
+-                            <option value="">ÔÇö Selecione um livro ÔÇö</option>
+-                            {Object.entries(NAA_BOOKS).map(([testament, books]) => (
+-                                <optgroup key={testament} label={testament}>
+-                                    {books.map(b => <option key={b.name} value={b.name}>{b.name}</option>)}
+-                                </optgroup>
+-                            ))}
+-                        </select>
+-                    </div>
+-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flexGrow: 1, minWidth: '130px' }}>
+-                        <label style={sectionLabel}>Cap├¡tulo</label>
+-                        <select
+-                            value={browseChapter ?? ''}
+-                            onChange={e => handleBrowseChapter(parseInt(e.target.value, 10))}
+-                            disabled={!browseBook}
+-                            style={{ padding: '8px', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '0.9rem' }}
+-                        >
+-                            <option value="">ÔÇö Cap├¡tulo ÔÇö</option>
+-                            {browseBook && Array.from({ length: browseBook.chapters }, (_, i) => i + 1).map(n => (
+-                                <option key={n} value={n}>{n}</option>
+-                            ))}
+-                        </select>
+-                    </div>
+-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flexGrow: 1, minWidth: '150px' }}>
+-                        <label style={sectionLabel}>Vers├¡culo (Opcional)</label>
+-                        <select
+-                            value={browseVerse ?? ''}
+-                            onChange={e => {
+-                                const val = e.target.value === '' ? null : parseInt(e.target.value, 10);
+-                                handleBrowseVerse(val);
+-                            }}
+-                            disabled={!browseChapter}
+-                            style={{ padding: '8px', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '0.9rem' }}
+-                        >
+-                            <option value="">ÔÇö Todos (Cap├¡tulo) ÔÇö</option>
+-                            {Array.from({ length: 176 }, (_, i) => i + 1).map(n => (
+-                                <option key={n} value={n}>Vers├¡culo {n}</option>
+-                            ))}
+-                        </select>
+-                    </div>
+-                </div>
+-
+-                {browseLoading && <LoadingSpinner />}
+-                {browseError && <ErrorMessage message={browseError} />}
+-
+-                {browseChapter && !browseLoading && (
+-                    browseCommentaries.length === 0 ? (
+-                        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-light)', backgroundColor: '#f5f5f5', borderRadius: '8px' }}>
+-                            Nenhum coment├írio encontrado para <strong>{browseBook?.name} {browseChapter}{browseVerse ? `:${browseVerse}` : ''}</strong>.<br />
+-                            <span style={{ fontSize: '0.85rem' }}>Use o bot├úo <em>Anexar</em> ou <em>Escanear</em> abaixo para adicionar coment├írios.</span>
+-                        </div>
+-                    ) : (
+-                        <div>
+-                            <p style={{ fontSize: '0.85rem', color: 'var(--text-light)', marginBottom: '0.75rem' }}>
+-                                <strong>{browseCommentaries.length}</strong> coment├írio(s) encontrado(s) para <strong>{browseBook?.name} {browseChapter}{browseVerse ? `:${browseVerse}` : ''}</strong> (clique em um coment├írio para abrir):
+-                            </p>
+-                            {browseCommentaries.map((c, i) => {
+-                                const itemKey = c.id || `comm-${i}`;
+-                                const isOpen = !!openCommentaryId[itemKey];
+-                                return (
+-                                    <div
+-                                        key={itemKey}
+-                                        style={{
+-                                            borderLeft: '4px solid #1565c0',
+-                                            backgroundColor: '#e3f2fd',
+-                                            borderRadius: '8px',
+-                                            marginBottom: '0.75rem',
+-                                            overflow: 'hidden',
+-                                            boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+-                                        }}
+-                                    >
+-                                        <div
+-                                            onClick={() => setOpenCommentaryId(prev => ({ ...prev, [itemKey]: !prev[itemKey] }))}
+-                                            style={{
+-                                                padding: '12px 15px',
+-                                                cursor: 'pointer',
+-                                                display: 'flex',
+-                                                justify: 'space-between',
+-                                                alignItems: 'center',
+-                                                backgroundColor: isOpen ? '#bbdefb' : '#e3f2fd',
+-                                                transition: 'background-color 0.2s',
+-                                                userSelect: 'none'
+-                                            }}
+-                                        >
+-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+-                                                <span style={{ fontWeight: 'bold', fontSize: '0.92rem', color: '#0d47a1' }}>
+-                                                    ­ƒæñ {c.author}
+-                                                </span>
+-                                                <span style={{ fontSize: '0.8rem', color: '#546e7a', backgroundColor: 'white', padding: '2px 8px', borderRadius: '12px', border: '1px solid #b0bec5' }}>
+-                                                    {c.verse ? `Vers├¡culo ${c.verse}` : 'Cap├¡tulo inteiro'}
++        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '1rem' }}>
++            
++            
++            <div className="reading-box" style={{ flex: '1 1 35%', minHeight: '15vh', overflowY: 'auto' }}>
++                {loading ? <LoadingSpinner /> : (
++                    verses.length === 0 ? <div style={{color: '#666'}}>Texto n├úo encontrado.</div> :
++                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
++                        {verses.map(v => (
++                            <div key={v.num} style={{ borderBottom: '1px dashed #e1eaf5', paddingBottom: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
++                                {/* NAA Text */}
++                                <p style={{ margin: 0, fontSize: '16px', lineHeight: '1.7', textAlign: 'left' }}>
++                                    <strong>{v.num} </strong>
++                                    {v.text.split(/(\s+)/).map((part, index) => {
++                                        if (!part.trim()) return <span key={index}>{part}</span>;
++                                        const keyId = `${v.num}-${index}`;
++                                        return (
++                                            <span key={index} style={{ position: 'relative', display: 'inline-block' }}>
++                                                <span
++                                                    onClick={() => setSelectedVerseWordIndex(selectedVerseWordIndex === keyId ? null : keyId)}
++                                                    style={{ 
++                                                        cursor: 'pointer', 
++                                                        padding: '2px', 
++                                                        borderRadius: '3px',
++                                                        backgroundColor: selectedVerseWordIndex === keyId ? '#e0f7fa' : 'transparent',
++                                                        transition: 'background-color 0.2s'
++                                                    }}
++                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = selectedVerseWordIndex === keyId ? '#e0f7fa' : '#f5f5f5'}
++                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = selectedVerseWordIndex === keyId ? '#e0f7fa' : 'transparent'}
++                                                >
++                                                    {parseBold(part)}
+                                                 </span>
+-                                            </div>
+-                                            <span style={{ fontSize: '0.85rem', color: '#0d47a1', fontWeight: 'bold' }}>
+-                                                {isOpen ? 'Ôû▓ Ocultar' : 'Ôû╝ Ver Coment├írio'}
++                                                {selectedVerseWordIndex === keyId && (
++                                                    <div style={{
++                                                        position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
++                                                        backgroundColor: 'white', border: '1px solid #ccc', boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
++                                                        borderRadius: '4px', padding: '8px', zIndex: 10, marginTop: '4px', whiteSpace: 'nowrap'
++                                                    }}>
++                                                        <button 
++                                                            onClick={() => handleVerseWordDeepAnalysis(v.num, index, part)}
++                                                            style={{ padding: '6px 12px', fontSize: '0.85rem', margin: 0, backgroundColor: '#1565C0', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
++                                                        >
++                                                            An├ílise Profunda
++                                                        </button>
++                                                    </div>
++                                                )}
+                                             </span>
+-                                        </div>
+-
+-                                        {isOpen && (
+-                                            <div style={{ padding: '15px', backgroundColor: 'white', borderTop: '1px solid #90caf9' }}>
+-                                                <p style={{ margin: 0, fontSize: '0.92rem', lineHeight: '1.6', color: '#212121', whitespace: 'pre-wrap' }}>{c.text}</p>
+-                                                <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'flex-end' }}>
+-                                                    <button
+-                                                        onClick={(e) => {
+-                                                            e.stopPropagation();
+-                                                            handleAddClick(e, 'add-construction', `Coment├írio de ${c.author} (${browseBook?.name} ${browseChapter}${c.verse ? ':' + c.verse : ''}):\n${c.text}`);
+-                                                        }}
+-                                                        style={{ fontSize: '0.82rem', padding: '6px 12px', backgroundColor: '#1565c0', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+-                                                    >
+-                                                        Adicionar na Constru├º├úo
+-                                                    </button>
+-                                                </div>
+-                                            </div>
+-                                        )}
++                                        );
++                                    })}
++                                </p>
++                                
++                                {/* BHS Text */}
++                                {bhsWordsByVerse[v.num] && bhsWordsByVerse[v.num].length > 0 && (
++                                    <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: '10px 6px', alignItems: 'center', direction: 'rtl', textAlign: 'right', backgroundColor: '#edf4fc', padding: '8px 12px', borderRadius: '8px', borderRight: '3px solid #2b569a' }}>
++                                        {bhsWordsByVerse[v.num].map((word, idx) => (
++                                            <span
++                                                key={idx}
++                                                onClick={() => setSelectedBhsWord(word)}
++                                                title={word.gloss || ''}
++                                                style={{
++                                                    fontFamily: "'SBL BibLit', 'SBL Hebrew', 'Times New Roman', serif",
++                                                    fontSize: '1.75rem',
++                                                    cursor: 'pointer',
++                                                    padding: '2px 6px',
++                                                    borderRadius: '6px',
++                                                    backgroundColor: selectedBhsWord?.sort === word.sort ? '#fff' : 'transparent',
++                                                    color: selectedBhsWord?.sort === word.sort ? '#0d47a1' : '#212121',
++                                                    transition: 'all 0.15s ease',
++                                                    borderBottom: selectedBhsWord?.sort === word.sort ? '3px solid #2b569a' : '3px solid transparent',
++                                                    lineHeight: '2.4rem'
++                                                }}
++                                                onMouseOver={e => {
++                                                    if (selectedBhsWord?.sort !== word.sort) {
++                                                        e.currentTarget.style.backgroundColor = '#fff';
++                                                        e.currentTarget.style.color = '#2b569a';
++                                                    }
++                                                }}
++                                                onMouseOut={e => {
++                                                    if (selectedBhsWord?.sort !== word.sort) {
++                                                        e.currentTarget.style.backgroundColor = 'transparent';
++                                                        e.currentTarget.style.color = '#212121';
++                                                    }
++                                                }}
++                                                dangerouslySetInnerHTML={{ __html: word.word }}
++                                            />
++                                        ))}
+                                     </div>
+-                                );
+-                            })}
+-                        </div>
+-                    )
+-                )}
+-            </div>
+-
+-            {/* ===== BOT├òES DE A├ç├âO ===== */}
+-            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
+-                <button
+-                    onClick={() => { setShowAnexarModal(true); setFormError(''); setFormSuccess(''); }}
+-                    style={{ flex: 1, minWidth: '160px', padding: '14px 20px', backgroundColor: '#1565c0', color: 'white', borderRadius: '8px', fontSize: '1rem', fontWeight: 'bold', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+-                >
+-                    ­ƒôÄ Anexar
+-                </button>
+-
+-                <label style={{ flex: 1, minWidth: '160px' }}>
+-                    <div style={{ padding: '14px 20px', backgroundColor: '#6a1b9a', color: 'white', borderRadius: '8px', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+-                        {scanLoading
+-                            ? (scanProgress.total > 0
+-                                ? `ÔÅ│ Segmento ${scanProgress.current}/${scanProgress.total}...`
+-                                : 'ÔÅ│ Extraindo texto...')
+-                            : '­ƒôä Escanear PDF'}
++                                )}
++                            </div>
++                        ))}
+                     </div>
+-                    <input
+-                        type="file"
+-                        accept=".pdf"
+-                        style={{ display: 'none' }}
+-                        disabled={scanLoading}
+-                        onChange={handleScanPdf}
+-                    />
+-                </label>
+-            </div>
+-
+-            {/* Escanear author config */}
+-            <div style={{ ...panelStyle, backgroundColor: '#faf3ff', border: '1px solid #ce93d8' }}>
+-                <label style={sectionLabel}>Autor Padr├úo para Escanear PDF</label>
+-                <input
+-                    type="text"
+-                    value={scanAuthor}
+-                    onChange={e => setScanAuthor(e.target.value)}
+-                    placeholder="Ex: Matthew Henry, Spurgeon, Moody..."
+-                    style={{ width: '100%', marginBottom: '4px' }}
+-                />
+-                <p style={{ fontSize: '0.78rem', color: '#7b1fa2', margin: 0 }}>
+-                    Ô£à Processa PDFs de <strong>qualquer tamanho</strong> ÔÇö o documento ├® dividido automaticamente em segmentos de ~4.000 palavras, cada um enviado ao Ollama em sequ├¬ncia. A tabela ├® preenchida incrementalmente conforme o processamento avan├ºa.
+-                </p>
++                )}
+             </div>
+-
+-            {/* Barra de progresso dos segmentos */}
+-            {scanLoading && scanProgress.total > 0 && (
+-                <div style={{ marginBottom: '1rem' }}>
+-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: '#6a1b9a', marginBottom: '5px', fontWeight: 'bold' }}>
+-                        <span>­ƒöì Processando segmento {scanProgress.current} de {scanProgress.total}</span>
+-                        <span>{Math.round((scanProgress.current / scanProgress.total) * 100)}%</span>
+-                    </div>
+-                    <div style={{ height: '10px', backgroundColor: '#ede7f6', borderRadius: '99px', overflow: 'hidden' }}>
+-                        <div style={{
+-                            height: '100%',
+-                            width: `${(scanProgress.current / scanProgress.total) * 100}%`,
+-                            backgroundColor: '#8e24aa',
+-                            borderRadius: '99px',
+-                            transition: 'width 0.4s ease'
+-                        }} />
+-                    </div>
+-                    {parsedCommentaries.length > 0 && (
+-                        <p style={{ fontSize: '0.78rem', color: '#555', marginTop: '5px' }}>
+-                            {parsedCommentaries.length} coment├írio(s) extra├¡dos at├® agora...
+-                        </p>
+-                    )}
++            
++            <div className="analysis-box" style={{ flex: '1 1 65%', height: 'auto' }}>
++                <div className="analysis-tabs">
++                    <div className={`analysis-tab ${activeTab === 'Cap├¡tulo' ? 'active' : ''}`} onClick={() => setActiveTab('Cap├¡tulo')}>Cap├¡tulo</div>
++                    <div className={`analysis-tab ${activeTab === 'Vers├¡culo' ? 'active' : ''}`} onClick={() => setActiveTab('Vers├¡culo')}>Vers├¡culo</div>
++                    <div className={`analysis-tab ${activeTab === 'Coment├írios' ? 'active' : ''}`} onClick={() => setActiveTab('Coment├írios')}>Coment├írios</div>
+                 </div>
+-            )}
+-            {scanLoading && scanProgress.total === 0 && <LoadingSpinner />}
+-            {!scanLoading && <>{scanError && <ErrorMessage message={scanError} />}</>}
+-
+-            {/* ===== TABELA DE PR├ë-VISUALIZA├ç├âO ===== */}
+-            {parsedCommentaries.length > 0 && (
+-                <div style={panelStyle}>
+-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '8px' }}>
+-                        <div>
+-                            <h3 style={{ margin: 0, color: '#4a148c' }}>Tabela de Coment├írios Escaneados</h3>
+-                            <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: 'var(--text-light)' }}>
+-                                {parsedCommentaries.length} item(ns) extra├¡dos{scanLoading ? ' (em processamento...)' : '. Edite ou exclua antes de salvar.'}.
+-                            </p>
++                <div className="analysis-content" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
++                    {activeTab === 'Cap├¡tulo' && (
++                        externalRefChapter ? <div className="embedded-view"><CapituloView externalRef={externalRefChapter} /></div> : <div style={{ color: '#666', textAlign: 'center' }}>Selecione o cap├¡tulo.</div>
++                    )}
++                    {activeTab === 'Vers├¡culo' && (
++                        selectedVerse ? (
++                            <div className="embedded-view">
++                                <VersiculoView externalRef={externalRefVerse} />
++                            </div>
++                        ) : <div style={{ color: '#666', textAlign: 'center', padding: '2rem' }}>Selecione o vers├¡culo no painel esquerdo.</div>
++                    )}
++                    {activeTab === 'Coment├írios' && (
++                        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '1rem' }}>
++                            {loadingComentarios ? <LoadingSpinner /> : (
++                                <>
++                                    {comentarios.length === 0 ? (
++                                        <div style={{ color: '#666', textAlign: 'center' }}>Nenhum coment├írio encontrado no banco de dados.</div>
++                                    ) : (
++                                        <>
++                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', backgroundColor: '#f0f6ff', padding: '10px', borderRadius: '8px', border: '1px solid #d0e2f7' }}>
++                                                <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontWeight: 'bold', color: '#0d47a1' }}>
++                                                    <input type="checkbox" checked={!!selectedCommentaries['Todos']} onChange={() => handleCommentaryCheck('Todos')} />
++                                                    Todos
++                                                </label>
++                                                {authors.map(author => (
++                                                    <label key={author} style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', color: '#333' }}>
++                                                        <input type="checkbox" checked={!!selectedCommentaries[author]} onChange={() => handleCommentaryCheck(author)} />
++                                                        {author}
++                                                    </label>
++                                                ))}
++                                            </div>
++                                            <div style={{ overflowY: 'auto', flexGrow: 1, paddingRight: '5px' }}>
++                                                {activeCommentaries.map(c => (
++                                                    <div key={c.id || Math.random()} style={{ marginBottom: '1rem', padding: '15px', backgroundColor: '#fff', border: '1px solid #e0e0e0', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
++                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', borderBottom: '1px solid #eee', paddingBottom: '8px' }}>
++                                                            <span style={{ fontSize: '1.2rem' }}>­ƒæñ</span>
++                                                            <strong style={{ color: '#0d47a1', fontSize: '1.05rem' }}>{c.author}</strong>
++                                                            {c.verse && <span style={{ backgroundColor: '#e3f2fd', color: '#1565c0', padding: '2px 6px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold' }}>v. {c.verse}</span>}
++                                                        </div>
++                                                        <div style={{ color: '#424242', lineHeight: '1.6' }}>
++                                                            {c.text.split(/\r?\n/).map((p, i) => (
++                                                                <p key={i} style={{ marginBottom: '8px' }}>{parseBold(p)}</p>
++                                                            ))}
++                                                        </div>
++                                                    </div>
++                                                ))}
++                                            </div>
++                                        </>
++                                    )}
++                                </>
++                            )}
+                         </div>
+-                        <button
+-                            onClick={handleAdicionarTabela}
+-                            disabled={saving}
+-                            style={{ padding: '10px 22px', backgroundColor: '#2e7d32', color: 'white', borderRadius: '8px', fontWeight: 'bold', border: 'none', cursor: 'pointer', fontSize: '0.95rem' }}
+-                        >
+-                            {saving ? 'Gravando...' : 'Ô£à Adicionar Tabela no Supabase'}
+-                        </button>
+-                    </div>
++                    )}
++                </div>
++            </div>
+ 
+-                    {saveError && <ErrorMessage message={saveError} />}
+-                    {saveSuccess && <div style={{ color: '#2e7d32', backgroundColor: '#e8f5e9', padding: '10px 15px', borderRadius: '6px', marginBottom: '1rem', fontWeight: 'bold' }}>{saveSuccess}</div>}
+-
+-                    <div style={{ overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
+-                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+-                            <thead>
+-                                <tr style={{ backgroundColor: '#ede7f6', borderBottom: '2px solid #b39ddb' }}>
+-                                    <th style={{ padding: '10px 12px' }}>Autor</th>
+-                                    <th style={{ padding: '10px 12px' }}>Livro</th>
+-                                    <th style={{ padding: '10px 12px' }}>Cap.</th>
+-                                    <th style={{ padding: '10px 12px' }}>Vers.</th>
+-                                    <th style={{ padding: '10px 12px', width: '50%' }}>Coment├írio</th>
+-                                    <th style={{ padding: '10px 12px', textAlign: 'center' }}>A├º├úo</th>
+-                                </tr>
+-                            </thead>
+-                            <tbody>
+-                                {parsedCommentaries.map((item) => (
+-                                    <tr key={item.id} style={{ borderBottom: '1px solid #ede7f6' }}>
+-                                        <td style={{ padding: '8px 12px' }}>
+-                                            <input type="text" value={item.author || ''} onChange={e => handleEditRow(item.id, 'author', e.target.value)} style={{ width: '100px', padding: '3px 5px', fontSize: '0.82rem' }} />
+-                                        </td>
+-                                        <td style={{ padding: '8px 12px' }}>
+-                                            <input type="text" value={item.book || ''} onChange={e => handleEditRow(item.id, 'book', e.target.value)} style={{ width: '100px', padding: '3px 5px', fontSize: '0.82rem' }} />
+-                                        </td>
+-                                        <td style={{ padding: '8px 12px' }}>
+-                                            <input type="number" value={item.chapter || ''} onChange={e => handleEditRow(item.id, 'chapter', parseInt(e.target.value, 10))} style={{ width: '48px', padding: '3px 5px', fontSize: '0.82rem' }} />
+-                                        </td>
+-                                        <td style={{ padding: '8px 12px' }}>
+-                                            <input type="text" value={item.verse === null || item.verse === undefined ? '' : item.verse} onChange={e => handleEditRow(item.id, 'verse', e.target.value === '' ? null : parseInt(e.target.value, 10))} placeholder="ÔÇö" style={{ width: '44px', padding: '3px 5px', fontSize: '0.82rem' }} />
+-                                        </td>
+-                                        <td style={{ padding: '8px 12px' }}>
+-                                            <textarea value={item.text || ''} onChange={e => handleEditRow(item.id, 'text', e.target.value)} style={{ width: '100%', minHeight: '56px', padding: '3px 5px', fontSize: '0.82rem', resize: 'vertical' }} />
+-                                        </td>
+-                                        <td style={{ padding: '8px 12px', textAlign: 'center' }}>
+-                                            <button onClick={() => handleDeleteRow(item.id)} style={{ backgroundColor: '#d32f2f', color: 'white', padding: '3px 8px', fontSize: '0.78rem', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+-                                                Excluir
+-                                            </button>
+-                                        </td>
+-                                    </tr>
+-                                ))}
+-                            </tbody>
+-                        </table>
++            {/* Modal de An├ílise Profunda NAA */}
++            {deepAnalysisModalOpen && (
++                <div style={{
++                    position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
++                    backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', 
++                    justifyContent: 'center', alignItems: 'center', zIndex: 1200, padding: '20px'
++                }}>
++                    <div style={{
++                        backgroundColor: '#ffffff', borderRadius: '12px',
++                        padding: '24px', boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)', position: 'relative',
++                        maxWidth: '600px', width: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column'
++                    }}>
++                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', borderBottom: '2px solid #e3f2fd', paddingBottom: '10px' }}>
++                            <h3 style={{ margin: 0, color: '#1565C0', fontSize: '1.3rem' }}>An├ílise Profunda: "{currentDeepAnalysis?.word}"</h3>
++                            <button onClick={() => setDeepAnalysisModalOpen(false)} style={{ background: 'transparent', color: '#666', border: 'none', fontSize: '1.5rem', cursor: 'pointer', padding: 0 }}>Ô£ò</button>
++                        </div>
++                        <div style={{ overflowY: 'auto', flexGrow: 1, paddingRight: '10px' }}>
++                            {currentDeepAnalysis?.loading && <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}><LoadingSpinner /></div>}
++                            {currentDeepAnalysis?.error && <ErrorMessage message={currentDeepAnalysis.error} />}
++                            {currentDeepAnalysis?.result && (
++                                <div>
++                                    <p style={{ margin: '0 0 15px 0', fontSize: '1.1rem', color: '#424242', backgroundColor: '#f5f5f5', padding: '10px', borderRadius: '6px' }}>
++                                        <strong>{currentDeepAnalysis.result.palavraOriginal}</strong> ; {currentDeepAnalysis.result.transliteracao} - <em>{currentDeepAnalysis.result.palavraNoVersiculo}</em>
++                                    </p>
++                                    {currentDeepAnalysis.result.passos && currentDeepAnalysis.result.passos.map((passo, pIndex) => (
++                                        <div key={pIndex} style={{ marginBottom: '15px' }}>
++                                            <strong style={{ display: 'block', color: '#1565C0', marginBottom: '4px' }}>{passo.titulo}</strong>
++                                            <p style={{ margin: 0, color: '#424242', lineHeight: '1.6' }}>{parseBold(passo.conteudo)}</p>
++                                        </div>
++                                    ))}
++                                </div>
++                            )}
++                        </div>
+                     </div>
+                 </div>
+             )}
+ 
+-            {/* ===== MODAL ANEXAR ===== */}
+-            {showAnexarModal && (
+-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+-                    <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '2rem', width: '100%', maxWidth: '560px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}>
+-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+-                            <h3 style={{ margin: 0, color: '#1a237e' }}>­ƒôÄ Anexar Coment├írio Manual</h3>
+-                            <button onClick={() => setShowAnexarModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#555' }}>Ô£ò</button>
+-                        </div>
+-
+-                        {formError && <ErrorMessage message={formError} />}
+-                        {formSuccess && <div style={{ color: '#2e7d32', backgroundColor: '#e8f5e9', padding: '10px', borderRadius: '6px', marginBottom: '1rem', fontWeight: 'bold' }}>{formSuccess}</div>}
+-
+-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+-                            <div>
+-                                <label style={sectionLabel}>Autor *</label>
+-                                <input type="text" value={formAuthor} onChange={e => setFormAuthor(e.target.value)} placeholder="Ex: Spurgeon" style={{ width: '100%' }} />
++            {/* Modal Interlinear BHS */}
++            {selectedBhsWord && (
++                <div style={{
++                    position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
++                    backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', 
++                    justifyContent: 'center', alignItems: 'center', zIndex: 1100, padding: '20px'
++                }}>
++                    <div style={{
++                        backgroundColor: '#ffffff', border: '2px solid #2b569a', borderRadius: '12px',
++                        padding: '24px', boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)', position: 'relative',
++                        maxWidth: '400px', width: '100%', maxHeight: '90vh', overflowY: 'auto',
++                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', textAlign: 'center'
++                    }}>
++                        <button
++                            onClick={() => setSelectedBhsWord(null)}
++                            style={{ position: 'absolute', top: '10px', right: '15px', background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#757575', padding: '4px' }}
++                        >Ô£ò</button>
++                        <div style={{ fontFamily: "'SBL BibLit', 'SBL Hebrew', 'Times New Roman', serif", fontSize: '3rem', color: '#0d47a1', marginBottom: '8px', lineHeight: '1.2' }} dangerouslySetInnerHTML={{ __html: selectedBhsWord.word }} />
++                        
++                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', backgroundColor: '#f5f5f5', padding: '16px', borderRadius: '8px', border: '1px solid #e0e0e0' }}>
++                            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #ddd', paddingBottom: '4px' }}>
++                                <span style={{ color: '#616161', fontWeight: 'bold' }}>Translitera├º├úo:</span>
++                                <span style={{ color: '#212121', fontStyle: 'italic' }}>{selectedBhsWord.translit}</span>
+                             </div>
+-                            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+-                                <div style={{ flexGrow: 1, minWidth: '150px' }}>
+-                                    <label style={sectionLabel}>Livro *</label>
+-                                    <select
+-                                        value={formBook}
+-                                        onChange={e => { setFormBook(e.target.value); setFormChapter(1); }}
+-                                        style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '0.9rem' }}
+-                                    >
+-                                        {Object.entries(NAA_BOOKS).map(([testament, books]) => (
+-                                            <optgroup key={testament} label={testament}>
+-                                                {books.map(b => <option key={b.name} value={b.name}>{b.name}</option>)}
+-                                            </optgroup>
+-                                        ))}
+-                                    </select>
+-                                </div>
+-                                <div style={{ minWidth: '100px' }}>
+-                                    <label style={sectionLabel}>Cap├¡tulo *</label>
+-                                    <select
+-                                        value={formChapter}
+-                                        onChange={e => setFormChapter(parseInt(e.target.value, 10))}
+-                                        style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '0.9rem' }}
+-                                    >
+-                                        {Array.from({ length: formBookChapters }, (_, i) => i + 1).map(n => (
+-                                            <option key={n} value={n}>{n}</option>
+-                                        ))}
+-                                    </select>
+-                                </div>
+-                                <div style={{ minWidth: '100px' }}>
+-                                    <label style={sectionLabel}>Vers├¡culo</label>
+-                                    <input type="number" value={formVerse} onChange={e => setFormVerse(e.target.value)} placeholder="(deixe vazio = cap. todo)" style={{ width: '100%' }} min={1} />
+-                                </div>
++                            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #ddd', paddingBottom: '4px' }}>
++                                <span style={{ color: '#616161', fontWeight: 'bold' }}>Significado:</span>
++                                <span style={{ color: '#212121', fontWeight: 600 }}>{selectedBhsWord.gloss}</span>
+                             </div>
+-                            <div>
+-                                <label style={sectionLabel}>Texto do Coment├írio *</label>
+-                                <textarea value={formText} onChange={e => setFormText(e.target.value)} placeholder="Escreva ou cole o coment├írio b├¡blico aqui..." style={{ width: '100%', minHeight: '130px', resize: 'vertical' }} />
++                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
++                                <span style={{ color: '#616161', fontWeight: 'bold' }}>Strong:</span>
++                                <a href={`https://biblehub.com/hebrew/${selectedBhsWord.strong.replace(/[^0-9]/g, '')}.htm`} target="_blank" rel="noopener noreferrer" style={{ color: '#1976d2', textDecoration: 'underline' }}>{selectedBhsWord.strong}</a>
+                             </div>
+                         </div>
+-
+-                        <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
+-                            <button onClick={() => setShowAnexarModal(false)} style={{ flex: 1, padding: '12px', backgroundColor: '#e0e0e0', color: '#333', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>
+-                                Cancelar
+-                            </button>
+-                            <button onClick={handleAnexarSave} disabled={formSaving} style={{ flex: 2, padding: '12px', backgroundColor: '#1565c0', color: 'white', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '1rem' }}>
+-                                {formSaving ? 'Salvando...' : '­ƒÆ¥ Salvar no Supabase'}
+-                            </button>
+-                        </div>
+                     </div>
+                 </div>
+             )}
+@@ -3719,167 +5875,176 @@ Responda APENAS em JSON com um array de objetos com as chaves: "author", "book",
+     );
+ };
+ 
++const RightSidebar = ({ selectedBook, selectedChapter, selectedVerse }) => {
++    const [activeTab, setActiveTab] = useState('Pensamentos');
++    const externalSearchTerm = selectedBook ? `${selectedBook.name} ${selectedChapter || ''}${selectedVerse ? ':'+selectedVerse : ''}` : '';
++    
++    return (
++        <div className="selection-box" style={{ height: '100%', padding: 0, overflow: 'hidden' }}>
++            <div className="analysis-tabs">
++                <div style={{ flex: 1, textAlign: 'center' }} className={`analysis-tab ${activeTab === 'Pensamentos' ? 'active' : ''}`} onClick={() => setActiveTab('Pensamentos')}>Pensamentos</div>
++                <div style={{ flex: 1, textAlign: 'center' }} className={`analysis-tab ${activeTab === 'Ilustra├º├Áes' ? 'active' : ''}`} onClick={() => setActiveTab('Ilustra├º├Áes')}>Ilustra├º├Áes</div>
++            </div>
++            <div style={{ padding: '0', height: '100%', overflowY: 'auto' }} className="embedded-view">
++                {activeTab === 'Pensamentos' && <PensamentosView externalSearch={externalSearchTerm} />}
++                {activeTab === 'Ilustra├º├Áes' && <IlustracoesView externalSearch={externalSearchTerm} />}
++            </div>
++        </div>
++    );
++};
+ 
+-// --- Main App Component ---
+ const App = () => {
+-    const TABS = ['NAA', 'BHS', 'Cap├¡tulo', 'Vers├¡culo', 'Pensamentos', 'Ilustra├º├Áes', 'Constru├º├úo', 'Chat', 'Obras'];
+-    const [activeTab, setActiveTab] = useState(TABS[0]);
+-    const [resetKey, setResetKey] = useState(0);
++    const [selectedBook, setSelectedBook] = useState(() => {
++        const saved = localStorage.getItem('selectedBook');
++        if (saved) return JSON.parse(saved);
++        return { name: "G├¬nesis", map: "Gen", chapters: 50 };
++    });
++    const [selectedChapter, setSelectedChapter] = useState(() => {
++        const saved = localStorage.getItem('selectedChapter');
++        return saved ? parseInt(saved, 10) : 1;
++    });
++    const [selectedVerse, setSelectedVerse] = useState(() => {
++        const saved = localStorage.getItem('selectedVerse');
++        return saved ? parseInt(saved, 10) : null;
++    });
++
++    useEffect(() => {
++        localStorage.setItem('selectedBook', JSON.stringify(selectedBook));
++    }, [selectedBook]);
++
++    useEffect(() => {
++        if (selectedChapter) {
++            localStorage.setItem('selectedChapter', selectedChapter.toString());
++        } else {
++            localStorage.removeItem('selectedChapter');
++        }
++    }, [selectedChapter]);
++
++    useEffect(() => {
++        if (selectedVerse) {
++            localStorage.setItem('selectedVerse', selectedVerse.toString());
++        } else {
++            localStorage.removeItem('selectedVerse');
++        }
++    }, [selectedVerse]);
+ 
+-    const [provider, setProvider] = useState(() => localStorage.getItem('ai_provider') || 'ollama');
++    const [provider, setProvider] = useState(() => localStorage.getItem('ai_provider') || 'gemini');
+     const [ollamaModel, setOllamaModel] = useState(() => localStorage.getItem('ollama_model') || 'qwen2.5:14b');
+     const [ollamaUrl, setOllamaUrl] = useState(() => localStorage.getItem('ollama_url') || 'http://localhost:11434');
+     const [showSettings, setShowSettings] = useState(false);
+ 
+-    const handleProviderChange = (val: string) => {
++    const handleProviderChange = (val) => {
++        if (val === 'ollama') {
++            if (!window.confirm('Voc├¬ selecionou Ollama. Certifique-se de que ele est├í rodando localmente. Deseja continuar?')) {
++                return;
++            }
++        }
+         setProvider(val);
+         localStorage.setItem('ai_provider', val);
+     };
+ 
+-    const handleModelChange = (val: string) => {
++    const handleModelChange = (val) => {
+         setOllamaModel(val);
+         localStorage.setItem('ollama_model', val);
+     };
+ 
+-    const handleUrlChange = (val: string) => {
++    const handleUrlChange = (val) => {
+         setOllamaUrl(val);
+         localStorage.setItem('ollama_url', val);
+     };
+ 
+-    useEffect(() => {
+-        const handleAnalyze = () => setActiveTab('Vers├¡culo');
+-        const handleThoughts = () => setActiveTab('Pensamentos');
+-        const handleIllustrations = () => setActiveTab('Ilustra├º├Áes');
+-        const handleResetAll = () => setResetKey(prev => prev + 1);
+-        const handleChangeTab = (e: any) => {
+-            if (e.detail) setActiveTab(e.detail);
+-        };
+-
+-        window.addEventListener('analyze-verse', handleAnalyze);
+-        window.addEventListener('search-thoughts', handleThoughts);
+-        window.addEventListener('search-illustrations', handleIllustrations);
+-        window.addEventListener('reset-all', handleResetAll);
+-        window.addEventListener('change-tab', handleChangeTab);
+-
+-        return () => {
+-            window.removeEventListener('analyze-verse', handleAnalyze);
+-            window.removeEventListener('search-thoughts', handleThoughts);
+-            window.removeEventListener('search-illustrations', handleIllustrations);
+-            window.removeEventListener('reset-all', handleResetAll);
+-            window.removeEventListener('change-tab', handleChangeTab);
+-        };
+-    }, []);
+-
+-    // Sync provider/model to global generateAIContent context via localStorage
+     useEffect(() => { localStorage.setItem('ai_provider', provider); }, [provider]);
+     useEffect(() => { localStorage.setItem('ollama_model', ollamaModel); }, [ollamaModel]);
+     useEffect(() => { localStorage.setItem('ollama_url', ollamaUrl); }, [ollamaUrl]);
+ 
+     return (
+         <div className="app-container">
+-            <header style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '5px' }}>
+-                <h1 style={{ margin: 0, fontSize: '1.8rem', fontWeight: 'bold', letterSpacing: '0.5px' }}>TEXTOS REAVIVADOS</h1>
+-                <button
+-                    onClick={() => setShowSettings(!showSettings)}
+-                    style={{
+-                        marginTop: '5px',
+-                        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+-                        border: 'none',
+-                        color: 'white',
+-                        padding: '6px 12px',
+-                        borderRadius: '4px',
+-                        cursor: 'pointer',
+-                        fontSize: '0.85rem',
+-                        fontWeight: 'bold',
+-                        display: 'flex',
+-                        alignItems: 'center',
+-                        gap: '6px',
+-                        transition: 'background-color 0.2s'
+-                    }}
+-                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.3)'}
+-                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.2)'}
+-                >
+-                    ÔÜÖ´©Å Provedor: {provider === 'gemini' ? 'Gemini (Nuvem)' : provider === 'supabase' ? 'Supabase (Sem IA)' : `Ollama (${ollamaModel})`}
+-                </button>
++            
++            <header>
++                <div>
++                    <h1>Redator B├¡blia</h1>
++                </div>
++                <div>
++                    <h2 style={{ fontSize: '1.2rem', fontWeight: 'bold', margin: 0 }}>
++                        {selectedBook ? `${selectedBook.name} ${selectedChapter || ''}${selectedVerse ? ':'+selectedVerse : ''}` : ''}
++                    </h2>
++                </div>
++                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
++                    <button
++                        onClick={() => setShowSettings(!showSettings)}
++                        style={{
++                            backgroundColor: '#f5f5f5',
++                            border: '1px solid #e0e0e0',
++                            color: '#333',
++                            padding: '6px 12px',
++                            borderRadius: '4px',
++                            cursor: 'pointer',
++                            fontSize: '0.85rem',
++                            fontWeight: 'bold',
++                            display: 'flex',
++                            alignItems: 'center',
++                            gap: '6px',
++                            transition: 'background-color 0.2s'
++                        }}
++                    >
++                        ÔÜÖ´©Å Provedor: {provider === 'gemini' ? 'Gemini (Nuvem)' : provider === 'supabase' ? 'Supabase (Sem IA)' : `Ollama (${ollamaModel})`}
++                    </button>
++                </div>
+             </header>
+ 
++
+             {showSettings && (
+-                <div style={{
+-                    backgroundColor: '#e3f2fd',
+-                    borderBottom: '1px solid #bbdefb',
+-                    padding: '1.25rem',
+-                    display: 'flex',
+-                    flexWrap: 'wrap',
+-                    gap: '1.25rem',
+-                    alignItems: 'center',
+-                    justifyContent: 'center'
+-                }}>
++                <div style={{ backgroundColor: '#e3f2fd', borderBottom: '1px solid #bbdefb', padding: '1.25rem', display: 'flex', flexWrap: 'wrap', gap: '1.25rem', alignItems: 'center', justifyContent: 'center' }}>
+                     <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', minWidth: '160px' }}>
+                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                             <label style={{ fontWeight: 'bold', fontSize: '0.8rem', color: '#0d47a1' }}>PROVEDOR DE IA:</label>
+-                            {provider === 'ollama' && (
+-                                <OllamaStartButton />
+-                            )}
++                            {provider === 'ollama' && <OllamaStartButton />}
+                         </div>
+-                        <select
+-                            value={provider}
+-                            onChange={(e) => handleProviderChange(e.target.value)}
+-                            style={{ padding: '8px', borderRadius: '4px', border: '1px solid #90caf9', fontSize: '0.9rem', backgroundColor: 'white', cursor: 'pointer' }}
+-                        >
++                        <select value={provider} onChange={(e) => handleProviderChange(e.target.value)} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #90caf9', fontSize: '0.9rem', backgroundColor: 'white', cursor: 'pointer' }}>
+                             <option value="gemini">Gemini (Nuvem)</option>
+                             <option value="ollama">Ollama (Local)</option>
+                             <option value="supabase">Supabase (Sem IA)</option>
+                         </select>
+                     </div>
+-
+                     {provider === 'ollama' && (
+                         <>
+                             <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', flexGrow: 1, minWidth: '180px' }}>
+                                 <label style={{ fontWeight: 'bold', fontSize: '0.8rem', color: '#0d47a1' }}>MODELO LOCAL (OLLAMA):</label>
+-                                <input
+-                                    type="text"
+-                                    value={ollamaModel}
+-                                    onChange={(e) => handleModelChange(e.target.value)}
+-                                    placeholder="Ex: qwen2.5:14b ou llama3.1:8b"
+-                                    style={{ padding: '8px', borderRadius: '4px', border: '1px solid #90caf9', fontSize: '0.9rem', backgroundColor: 'white' }}
+-                                />
++                                <input type="text" value={ollamaModel} onChange={(e) => handleModelChange(e.target.value)} placeholder="Ex: qwen2.5:14b" style={{ padding: '8px', borderRadius: '4px', border: '1px solid #90caf9', fontSize: '0.9rem', backgroundColor: 'white' }} />
+                             </div>
+                             <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', flexGrow: 1, minWidth: '180px' }}>
+                                 <label style={{ fontWeight: 'bold', fontSize: '0.8rem', color: '#0d47a1' }}>ENDERE├çO DO SERVER:</label>
+-                                <input
+-                                    type="text"
+-                                    value={ollamaUrl}
+-                                    onChange={(e) => handleUrlChange(e.target.value)}
+-                                    placeholder="Ex: http://localhost:11434"
+-                                    style={{ padding: '8px', borderRadius: '4px', border: '1px solid #90caf9', fontSize: '0.9rem', backgroundColor: 'white' }}
+-                                />
++                                <input type="text" value={ollamaUrl} onChange={(e) => handleUrlChange(e.target.value)} placeholder="Ex: http://localhost:11434" style={{ padding: '8px', borderRadius: '4px', border: '1px solid #90caf9', fontSize: '0.9rem', backgroundColor: 'white' }} />
+                             </div>
+                         </>
+                     )}
+                 </div>
+             )}
+ 
+-            <nav className="tab-nav">
+-                {TABS.map(tab => (
+-                    <button
+-                        key={tab}
+-                        className={`tab-button ${activeTab === tab ? 'active' : ''}`}
+-                        onClick={() => setActiveTab(tab)}
+-                    >
+-                        {tab}
+-                    </button>
+-                ))}
+-            </nav>
+             <main>
+-                <div style={{ display: activeTab === 'NAA' ? 'block' : 'none' }}><BibliaView key={`biblia-${resetKey}`} /></div>
+-                <div style={{ display: activeTab === 'BHS' ? 'block' : 'none' }}><BhsView key={`bhs-${resetKey}`} /></div>
+-                <div style={{ display: activeTab === 'Cap├¡tulo' ? 'block' : 'none' }}><CapituloView /></div>
+-                <div style={{ display: activeTab === 'Vers├¡culo' ? 'block' : 'none' }}><VersiculoView key={`versiculo-${resetKey}`} /></div>
+-                <div style={{ display: activeTab === 'Pensamentos' ? 'block' : 'none' }}><PensamentosView key={`pensamentos-${resetKey}`} /></div>
+-                <div style={{ display: activeTab === 'Ilustra├º├Áes' ? 'block' : 'none' }}><IlustracoesView key={`ilustracoes-${resetKey}`} /></div>
+-                <div style={{ display: activeTab === 'Constru├º├úo' ? 'block' : 'none' }}><ConstrucaoView key={`construcao-${resetKey}`} /></div>
+-                <div style={{ display: activeTab === 'Chat' ? 'block' : 'none' }}><ChatView key={`chat-${resetKey}`} /></div>
+-                <div style={{ display: activeTab === 'Obras' ? 'block' : 'none' }}><ImportarView key={`importar-${resetKey}`} /></div>
++                <div className="sidebar-left">
++                    <LeftSidebar 
++                        selectedBook={selectedBook} setSelectedBook={setSelectedBook}
++                        selectedChapter={selectedChapter} setSelectedChapter={setSelectedChapter}
++                        selectedVerse={selectedVerse} setSelectedVerse={setSelectedVerse}
++                    />
++                </div>
++                
++                <div className="center-content">
++                    <CenterContent 
++                        selectedBook={selectedBook}
++                        selectedChapter={selectedChapter}
++                        selectedVerse={selectedVerse}
++                    />
++                </div>
++                
++                <div className="sidebar-right">
++                    <RightSidebar 
++                        selectedBook={selectedBook}
++                        selectedChapter={selectedChapter}
++                        selectedVerse={selectedVerse}
++                    />
++                </div>
+             </main>
+         </div>
+     );

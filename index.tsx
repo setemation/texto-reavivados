@@ -1412,7 +1412,8 @@ const getHebrewBookIndex = (bookName: string): number => {
     });
 };
 
-const CapituloView = () => {
+const CapituloView = ({ externalRef }) => {
+    useEffect(() => { if (externalRef && externalRef !== ref) setRef(externalRef); }, [externalRef]);
     const [ref, setRef] = useState('');
     const [result, setResult] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -1611,11 +1612,28 @@ Retorne um texto bem formatado em Markdown com títulos curtos.`;
 
     return (
         <div className="tab-content">
-            <h2>Análise de Capítulo</h2>
-            <div className="form-group">
-                <input type="text" value={ref} onChange={e => setRef(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAnalyze()} placeholder="Ex: Gênesis 1" />
-                <button onClick={handleAnalyze} disabled={loading}>{loading ? 'Analisando...' : 'Analisar'}</button>
-                <button onClick={handleViewText} disabled={loadingText}>{loadingText ? 'Carregando...' : 'Ver Texto'}</button>
+            
+            <div className="form-group" style={{ position: 'relative', width: '100%', margin: '0 0 1rem 0', display: 'block' }}>
+                <input 
+                    type="text" 
+                    value={ref} 
+                    onChange={e => setRef(e.target.value)} 
+                    onKeyDown={e => e.key === 'Enter' && handleAnalyze()} 
+                    placeholder="Ex: Gênesis 1" 
+                    style={{ width: '100%', paddingRight: '40px' }}
+                />
+                <span 
+                    onClick={() => !loading && handleAnalyze()} 
+                    title="Analisar"
+                    style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '1.2rem', opacity: loading ? 0.5 : 1, userSelect: 'none', color: '#616161' }}
+                >
+                    {loading ? '⏳' : (
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                    )}
+                </span>
             </div>
             {loading && <LoadingSpinner />}
             {error && <ErrorMessage message={error} />}
@@ -1631,9 +1649,6 @@ Retorne um texto bem formatado em Markdown com títulos curtos.`;
                         {(result.sinteseCapitulo || '').split(/\n+/).filter(p => p.trim()).map((p, i) => (
                             <div key={i} style={{ marginBottom: '1rem' }}>
                                 <p>{p}</p>
-                                <div className="quote-actions" style={{ justifyContent: 'flex-start', marginTop: '10px' }}>
-                                    <button onClick={(e) => handleAddClick(e, 'add-construction-apresentacao', p)}>Adicionar na Construção</button>
-                                </div>
                             </div>
                         ))}
                     </div>
@@ -1651,9 +1666,6 @@ Retorne um texto bem formatado em Markdown com títulos curtos.`;
                             <div className="quote-actions" style={{ justifyContent: 'flex-start', marginTop: '10px', gap: '10px' }}>
                                 <button onClick={() => window.dispatchEvent(new CustomEvent('analyze-verse', { detail: `${ref}:${tema.versiculos}` }))}>
                                     Análise do versículo
-                                </button>
-                                <button onClick={(e) => handleAddClick(e, 'add-construction', `Título: ${tema.titulo}\nDescrição: ${tema.explicacao}\nVersículo(s): ${ref}:${tema.versiculos}${tema.versiculosTexto ? '\nTexto Bíblico:\n' + tema.versiculosTexto : ''}`)}>
-                                    Adicionar na Construção
                                 </button>
                             </div>
                         </div>
@@ -1826,7 +1838,8 @@ Retorne um texto bem formatado em Markdown com títulos curtos.`;
     );
 };
 
-const VersiculoView = () => {
+const VersiculoView = ({ externalRef }) => {
+    useEffect(() => { if (externalRef && externalRef !== ref) setRef(externalRef); }, [externalRef]);
     const [ref, setRef] = useState('');
     const [result, setResult] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -2231,142 +2244,29 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
 
     return (
         <div className="tab-content">
-            <h2>Análise de Versículo</h2>
-            <div className="form-group">
-                <input type="text" value={ref} onChange={e => setRef(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAnalyze()} placeholder="Ex: João 3:16" />
-                <button onClick={handleAnalyze} disabled={loading}>{loading ? 'Analisando...' : 'Analisar'}</button>
+            
+            <div className="form-group" style={{ position: 'relative', width: '100%', margin: '0 0 1rem 0', display: 'block' }}>
+                <input 
+                    type="text" 
+                    value={ref} 
+                    onChange={e => setRef(e.target.value)} 
+                    onKeyDown={e => e.key === 'Enter' && handleAnalyze()} 
+                    placeholder="Ex: João 3:16" 
+                    style={{ width: '100%', paddingRight: '40px' }}
+                />
+                <span 
+                    onClick={() => !loading && handleAnalyze()} 
+                    title="Analisar"
+                    style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '1.2rem', opacity: loading ? 0.5 : 1, userSelect: 'none', color: '#616161' }}
+                >
+                    {loading ? '⏳' : (
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                    )}
+                </span>
             </div>
-            {bhsWords && bhsWords.length > 0 && (
-                <div className="card" style={{ marginTop: '1rem', marginBottom: '1rem', backgroundColor: '#f9f9f9', borderLeft: '4px solid #2b569a' }}>
-                    <h4 style={{ color: '#2b569a', fontSize: '1.1rem', fontWeight: 'bold', marginBottom: '10px', textAlign: 'left' }}>
-                        Texto Hebraico (BHS)
-                    </h4>
-                    <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: '10px 6px', alignItems: 'center', direction: 'rtl', textAlign: 'right' }}>
-                        {bhsWords.map((word, idx) => (
-                            <span
-                                key={idx}
-                                onClick={() => {
-                                    setSelectedBhsWord(word);
-                                    setBhsAiAnalysis('');
-                                }}
-                                title={word.gloss || ''}
-                                style={{
-                                    fontFamily: "'SBL BibLit', 'SBL Hebrew', 'Times New Roman', serif",
-                                    fontSize: '1.75rem',
-                                    cursor: 'pointer',
-                                    padding: '2px 6px',
-                                    borderRadius: '6px',
-                                    backgroundColor: selectedBhsWord?.sort === word.sort ? '#edf4fc' : 'transparent',
-                                    color: selectedBhsWord?.sort === word.sort ? '#0d47a1' : '#212121',
-                                    transition: 'all 0.15s ease',
-                                    borderBottom: selectedBhsWord?.sort === word.sort ? '3px solid #2b569a' : '3px solid transparent',
-                                    lineHeight: '2.4rem'
-                                }}
-                                onMouseOver={e => {
-                                    if (selectedBhsWord?.sort !== word.sort) {
-                                        e.currentTarget.style.backgroundColor = '#f0f6ff';
-                                        e.currentTarget.style.color = '#2b569a';
-                                    }
-                                }}
-                                onMouseOut={e => {
-                                    if (selectedBhsWord?.sort !== word.sort) {
-                                        e.currentTarget.style.backgroundColor = 'transparent';
-                                        e.currentTarget.style.color = '#212121';
-                                    }
-                                }}
-                                dangerouslySetInnerHTML={{ __html: word.word }}
-                            />
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {verseText && (
-                <div className="card" style={{ marginTop: '1rem', marginBottom: '1rem', backgroundColor: '#f9f9f9', borderLeft: '4px solid #4CAF50', position: 'relative' }}>
-                    <h4 style={{ color: '#4CAF50', fontSize: '1.1rem', fontWeight: 'bold', marginBottom: '10px', textAlign: 'left' }}>
-                        Tradução em Português (NAA)
-                    </h4>
-                    <p style={{ fontStyle: 'italic', lineHeight: '1.8' }}>
-                        {verseText.split(/(\s+)/).map((part, index) => {
-                            if (/^\s+$/.test(part)) {
-                                return <span key={index}>{part}</span>;
-                            }
-                            return (
-                                <span key={index} style={{ position: 'relative', display: 'inline-block' }}>
-                                    <span 
-                                        onClick={() => handleVerseWordClick(index)}
-                                        style={{ 
-                                            cursor: 'pointer', 
-                                            padding: '2px', 
-                                            borderRadius: '3px',
-                                            backgroundColor: selectedVerseWordIndex === index ? '#e0f7fa' : 'transparent',
-                                            transition: 'background-color 0.2s'
-                                        }}
-                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = selectedVerseWordIndex === index ? '#e0f7fa' : '#f5f5f5'}
-                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = selectedVerseWordIndex === index ? '#e0f7fa' : 'transparent'}
-                                    >
-                                        {parseBold(part)}
-                                    </span>
-                                    {selectedVerseWordIndex === index && (
-                                        <div style={{
-                                            position: 'absolute',
-                                            top: '100%',
-                                            left: '50%',
-                                            transform: 'translateX(-50%)',
-                                            backgroundColor: 'white',
-                                            border: '1px solid #ccc',
-                                            boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
-                                            borderRadius: '4px',
-                                            padding: '8px',
-                                            zIndex: 10,
-                                            marginTop: '4px',
-                                            whiteSpace: 'nowrap'
-                                        }}>
-                                            <button 
-                                                onClick={() => handleVerseWordDeepAnalysis(index, part)}
-                                                style={{ padding: '6px 12px', fontSize: '0.85rem', margin: 0, backgroundColor: '#1565C0', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                                            >
-                                                Análise Profunda
-                                            </button>
-                                        </div>
-                                    )}
-                                </span>
-                            );
-                        })}
-                    </p>
-
-                    {Object.entries(verseWordDeepAnalysis).map(([indexStr, state]: [string, any]) => {
-                        const index = parseInt(indexStr);
-                        const word = verseText.split(/(\s+)/)[index];
-                        if (!state) return null;
-                        
-                        return (
-                            <div key={`verse-analysis-${index}`} style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#fff', border: '1px solid #e0e0e0', borderRadius: '4px' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
-                                    <h4 style={{ margin: 0, color: '#1565C0' }}>Análise Profunda: "{word.replace(/[.,;!?()]/g, '')}"</h4>
-                                    <button onClick={() => setVerseWordDeepAnalysis(prev => { const next = {...prev}; delete next[index]; return next; })} style={{ background: 'transparent', color: '#666', border: 'none', padding: '2px 8px', margin: 0, cursor: 'pointer', fontSize: '1.2rem', lineHeight: '1' }}>✕</button>
-                                </div>
-                                
-                                {state.loading && <p style={{fontStyle: 'normal'}}>Analisando...</p>}
-                                {state.error && <ErrorMessage message={state.error} />}
-                                {state.result && (
-                                    <>
-                                        <p style={{ margin: '10px 0 15px 0', fontSize: '1.05rem', color: '#424242' }}>
-                                            <strong>{state.result.palavraOriginal}</strong> ; {state.result.transliteracao} - <em>{state.result.palavraNoVersiculo}</em>
-                                        </p>
-                                        {state.result.passos && state.result.passos.map((passo, pIndex) => (
-                                            <div key={pIndex} style={{ marginBottom: '10px' }}>
-                                                <strong style={{fontStyle: 'normal'}}>{passo.titulo}</strong>
-                                                <p style={{ margin: '5px 0 0 0', fontStyle: 'normal', color: '#616161' }}>{parseBold(passo.conteudo)}</p>
-                                            </div>
-                                        ))}
-                                    </>
-                                )}
-                            </div>
-                        );
-                    })}
-                </div>
-            )}
             {loading && <LoadingSpinner />}
             {error && <ErrorMessage message={error} />}
             {result && (
@@ -2381,9 +2281,6 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
                         {(result.apresentacaoCapitulo || '').split(/\n+/).filter(p => p.trim()).map((p, i, arr) => (
                             <div key={i} style={{ marginBottom: '1.5rem', paddingBottom: '1.5rem', borderBottom: i < arr.length - 1 ? '1px solid #e0e0e0' : 'none' }}>
                                 <p>{parseBold(p)}</p>
-                                <div className="quote-actions" style={{ justifyContent: 'flex-start', marginTop: '10px', borderTop: 'none', paddingTop: 0 }}>
-                                    <button onClick={(e) => handleAddClick(e, 'add-construction-apresentacao', p)}>Adicionar na Construção</button>
-                                </div>
                             </div>
                         ))}
                     </div>
@@ -2392,9 +2289,6 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
                         {(result.analiseHistoricoCultural || '').split(/\n+/).filter(p => p.trim()).map((p, i, arr) => (
                             <div key={i} style={{ marginBottom: '1.5rem', paddingBottom: '1.5rem', borderBottom: i < arr.length - 1 ? '1px solid #e0e0e0' : 'none' }}>
                                 <p>{parseBold(p)}</p>
-                                <div className="quote-actions" style={{ justifyContent: 'flex-start', marginTop: '10px', borderTop: 'none', paddingTop: 0 }}>
-                                    <button onClick={(e) => handleAddClick(e, 'add-construction-historica', p)}>Adicionar na Construção</button>
-                                </div>
                             </div>
                         ))}
                     </div>
@@ -2440,9 +2334,8 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
                                             <p>{item.sentidoEnuances}</p>
                                         </>
                                     )}
-                                    <div className="quote-actions" style={{ justifyContent: 'flex-start', marginTop: '10px', borderTop: 'none', paddingTop: 0, gap: '10px' }}>
-                                        <button onClick={(e) => handleAddClick(e, 'add-construction-palavras', `**${matchingWord ? matchingWord.word.replace(/<[^>]*>/g, '') : item.palavraOriginal}** (${matchingWord ? matchingWord.translit : item.transliteracao}) - ${item.sentidoEnuances}`)}>Adicionar na Construção</button>
-                                        <button onClick={() => handleDeepAnalysis(index, item)} disabled={deepAnalysisState[index]?.loading}>
+                                    <div className="quote-actions" style={{ justifyContent: 'flex-start', marginTop: '10px', borderTop: 'none', paddingTop: 0, gap: '15px' }}>
+                                        <button onClick={() => handleDeepAnalysis(index, item)} disabled={deepAnalysisState[index]?.loading} style={{ backgroundColor: 'transparent', border: 'none', color: '#0d47a1', cursor: 'pointer', padding: 0, fontWeight: 'bold' }}>
                                             {deepAnalysisState[index]?.loading ? 'Analisando...' : 'Análise Profunda'}
                                         </button>
                                     </div>
@@ -2455,14 +2348,7 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
                                                 <div key={pIndex} style={{ marginBottom: '15px' }}>
                                                     <p style={{ fontWeight: 'bold', margin: '0 0 5px 0' }}>{passo.titulo}</p>
                                                     <p style={{ margin: '0 0 10px 0' }}>{passo.conteudo}</p>
-                                                    <div className="quote-actions" style={{ justifyContent: 'flex-start', margin: 0, padding: 0, border: 'none' }}>
-                                                        <button 
-                                                            onClick={(e) => handleAddClick(e, 'add-construction-palavras', `**${matchingWord ? matchingWord.word.replace(/<[^>]*>/g, '') : item.palavraOriginal}** (${matchingWord ? matchingWord.translit : item.transliteracao})\n**${passo.titulo}**\n${passo.conteudo}`)}
-                                                            style={{ fontSize: '12px', padding: '4px 8px' }}
-                                                        >
-                                                            Adicionar na Construção
-                                                        </button>
-                                                    </div>
+
                                                 </div>
                                             ))}
                                         </div>
@@ -2476,8 +2362,13 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
                         {(result.analiseTeologica || '').split(/\n+/).filter(p => p.trim()).map((p, i, arr) => (
                             <div key={i} style={{ marginBottom: '1.5rem', paddingBottom: '1.5rem', borderBottom: i < arr.length - 1 ? '1px solid #e0e0e0' : 'none' }}>
                                 <p>{parseBold(p)}</p>
-                                <div className="quote-actions" style={{ justifyContent: 'flex-start', marginTop: '10px', borderTop: 'none', paddingTop: 0 }}>
-                                    <button onClick={(e) => handleAddClick(e, 'add-construction-teologica', p)}>Adicionar na Construção</button>
+                                <div className="quote-actions" style={{ justifyContent: 'flex-start', marginTop: '10px', borderTop: 'none', paddingTop: 0, gap: '15px' }}>
+                                    <button onClick={() => handleExpandText('teologica', i, p)} disabled={actionLoading[`teologica-expand-${i}`]} style={{ backgroundColor: 'transparent', border: 'none', color: '#0d47a1', cursor: 'pointer', padding: 0, fontWeight: 'bold' }}>
+                                        {actionLoading[`teologica-expand-${i}`] ? 'Ampliando...' : 'Ampliar'}
+                                    </button>
+                                    <button onClick={() => handleRewriteText('teologica', i, p)} disabled={actionLoading[`teologica-rewrite-${i}`]} style={{ backgroundColor: 'transparent', border: 'none', color: '#0d47a1', cursor: 'pointer', padding: 0, fontWeight: 'bold' }}>
+                                        {actionLoading[`teologica-rewrite-${i}`] ? 'Reescrevendo...' : 'Reescrever'}
+                                    </button>
                                 </div>
                             </div>
                         ))}
@@ -2495,10 +2386,15 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
                             return (
                                 <div key={i} style={{ marginBottom: '1.5rem', paddingBottom: '1.5rem', borderBottom: i < arr.length - 1 ? '1px solid #e0e0e0' : 'none' }}>
                                     <p>{parseBold(cleanP)}</p>
-                                    <div className="quote-actions" style={{ justifyContent: 'flex-start', marginTop: '10px', borderTop: 'none', paddingTop: 0, gap: '10px' }}>
-                                        <button onClick={(e) => handleAddClick(e, 'add-construction-aplicacao', cleanP)}>Adicionar na Construção</button>
-                                        <button onClick={() => window.dispatchEvent(new CustomEvent('search-thoughts', { detail: fraseResumo }))}>Procurar Pensamentos</button>
-                                        <button onClick={() => window.dispatchEvent(new CustomEvent('search-illustrations', { detail: fraseResumo }))}>Procurar Ilustrações</button>
+                                    <div className="quote-actions" style={{ justifyContent: 'flex-start', marginTop: '10px', borderTop: 'none', paddingTop: 0, gap: '15px' }}>
+                                        <button onClick={() => handleExpandText('aplicacao', i, cleanP)} disabled={actionLoading[`aplicacao-expand-${i}`]} style={{ backgroundColor: 'transparent', border: 'none', color: '#0d47a1', cursor: 'pointer', padding: 0, fontWeight: 'bold' }}>
+                                            {actionLoading[`aplicacao-expand-${i}`] ? 'Ampliando...' : 'Ampliar'}
+                                        </button>
+                                        <button onClick={() => handleRewriteText('aplicacao', i, cleanP)} disabled={actionLoading[`aplicacao-rewrite-${i}`]} style={{ backgroundColor: 'transparent', border: 'none', color: '#0d47a1', cursor: 'pointer', padding: 0, fontWeight: 'bold' }}>
+                                            {actionLoading[`aplicacao-rewrite-${i}`] ? 'Reescrevendo...' : 'Reescrever'}
+                                        </button>
+                                        <button onClick={() => window.dispatchEvent(new CustomEvent('search-thoughts', { detail: fraseResumo }))} style={{ backgroundColor: 'transparent', border: 'none', color: '#0d47a1', cursor: 'pointer', padding: 0, fontWeight: 'bold' }}>Pensamentos</button>
+                                        <button onClick={() => window.dispatchEvent(new CustomEvent('search-illustrations', { detail: fraseResumo }))} style={{ backgroundColor: 'transparent', border: 'none', color: '#0d47a1', cursor: 'pointer', padding: 0, fontWeight: 'bold' }}>Ilustrações</button>
                                     </div>
                                 </div>
                             );
@@ -2585,7 +2481,8 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
     );
 };
 
-const PensamentosView = () => {
+const PensamentosView = ({ externalSearch }) => {
+    useEffect(() => { if (externalSearch && externalSearch !== topic) setTopic(externalSearch); }, [externalSearch]);
     const [topic, setTopic] = useState('');
     const [quotes, setQuotes] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -2651,10 +2548,28 @@ const PensamentosView = () => {
 
     return (
         <div className="tab-content">
-            <h2>Busca de Citações</h2>
-            <div className="form-group">
-                <input type="text" value={topic} onChange={e => setTopic(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch(false)} placeholder="Ex: Graça, C.S. Lewis" />
-                <button onClick={() => handleSearch(false)} disabled={loading}>{loading ? 'Buscando...' : 'Buscar'}</button>
+
+            <div className="form-group" style={{ position: 'relative', width: '90%', margin: '15px auto 1rem auto', display: 'block' }}>
+                <input 
+                    type="text" 
+                    value={topic} 
+                    onChange={e => setTopic(e.target.value)} 
+                    onKeyDown={e => e.key === 'Enter' && handleSearch(false)} 
+                    placeholder="Ex: Graça, C.S. Lewis" 
+                    style={{ width: '100%', paddingRight: '40px' }}
+                />
+                <span 
+                    onClick={() => !loading && handleSearch(false)} 
+                    title="Buscar"
+                    style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '1.2rem', opacity: loading ? 0.5 : 1, userSelect: 'none', color: '#616161' }}
+                >
+                    {loading ? '⏳' : (
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                    )}
+                </span>
             </div>
             {loading && !quotes.length && <LoadingSpinner />}
             {error && <ErrorMessage message={error} />}
@@ -2667,8 +2582,7 @@ const PensamentosView = () => {
                         <div className="quote-actions">
                             <button onClick={() => runSubAction(q.id, `Verifique a autenticidade da citação: "${q.quote}" atribuída a ${q.source}.`, 'verify')}>Verificar</button>
                             <button onClick={() => runSubAction(q.id, `Fale sobre o autor e a obra: ${q.source}.`, 'about')}>Sobre</button>
-                            <button onClick={() => window.dispatchEvent(new CustomEvent('search-illustrations', { detail: q.quote }))}>Procurar Ilustrações</button>
-                            <button onClick={(e) => handleAddClick(e, 'add-construction-pensamentos', `"${q.quote}" — ${q.source}`)}>Adicionar na Construção</button>
+                            <button onClick={() => window.dispatchEvent(new CustomEvent('search-illustrations', { detail: q.quote }))}>🔍 Ilustrações</button>
                         </div>
                         {subAction.loading && <LoadingSpinner />}
                         {subAction.verify && <div className="sub-result"><strong>Verificação:</strong> {subAction.verify}</div>}
@@ -2706,7 +2620,8 @@ const renderFonteLink = (fonte: string) => {
     );
 };
 
-const IlustracoesView = () => {
+const IlustracoesView = ({ externalSearch }) => {
+    useEffect(() => { if (externalSearch && externalSearch !== theme) setTheme(externalSearch); }, [externalSearch]);
     const [theme, setTheme] = useState('');
     const [illustrations, setIllustrations] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -2789,10 +2704,28 @@ Gere exatamente mais TRÊS parágrafos detalhados ampliando essa ilustração, c
 
     return (
         <div className="tab-content">
-            <h2>Busca de Ilustrações</h2>
-            <div className="form-group">
-                <input type="text" value={theme} onChange={e => setTheme(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch('notícias', null, false)} placeholder="Ex: Perdão, Fé" />
-                <button onClick={() => handleSearch('notícias', null, false)} disabled={loading}>{loading ? 'Buscando...' : 'Buscar'}</button>
+
+            <div className="form-group" style={{ position: 'relative', width: '90%', margin: '15px auto 1rem auto', display: 'block' }}>
+                <input 
+                    type="text" 
+                    value={theme} 
+                    onChange={e => setTheme(e.target.value)} 
+                    onKeyDown={e => e.key === 'Enter' && handleSearch('notícias', null, false)} 
+                    placeholder="Ex: Perdão, Fé" 
+                    style={{ width: '100%', paddingRight: '40px' }}
+                />
+                <span 
+                    onClick={() => !loading && handleSearch('notícias', null, false)} 
+                    title="Buscar"
+                    style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '1.2rem', opacity: loading ? 0.5 : 1, userSelect: 'none', color: '#616161' }}
+                >
+                    {loading ? '⏳' : (
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                    )}
+                </span>
             </div>
             {loading && !illustrations.length && <LoadingSpinner />}
             {error && <ErrorMessage message={error} />}
@@ -2803,7 +2736,6 @@ Gere exatamente mais TRÊS parágrafos detalhados ampliando essa ilustração, c
                     <div className="quote-actions" style={{ justifyContent: 'flex-end', gap: '10px' }}>
                         <button onClick={() => handleCheck(item.id, item)} disabled={checkState[item.id]?.loading}>Checar</button>
                         <button onClick={() => handleExpand(item.id, item)} disabled={expandState[item.id]?.loading}>{expandState[item.id]?.loading ? 'Ampliando...' : 'Ampliar'}</button>
-                        <button onClick={(e) => handleAddClick(e, 'add-construction-ilustracao', `${item.resumo}\n\nFonte: ${item.fonte}`)}>Adicionar na Construção</button>
                     </div>
                     {checkState[item.id]?.loading && <LoadingSpinner />}
                     {checkState[item.id]?.result && <div className="sub-result">{checkState[item.id].result}</div>}
@@ -2813,12 +2745,7 @@ Gere exatamente mais TRÊS parágrafos detalhados ampliando essa ilustração, c
                         <div className="sub-result expanded-content" style={{ marginTop: '10px', padding: '12px', backgroundColor: '#f9fbe7', borderRadius: '6px', borderLeft: '4px solid #c0ca33' }}>
                             <strong style={{ display: 'block', marginBottom: '8px', color: '#558b2f' }}>Ilustração Ampliada:</strong>
                             {expandState[item.id].result.split('\n').filter(p => p.trim()).map((p, i) => <p key={i} style={{ marginBottom: '8px' }}>{p}</p>)}
-                            <button 
-                                onClick={(e) => handleAddClick(e, 'add-construction-ilustracao', `${item.resumo}\n\nIlustração Ampliada:\n${expandState[item.id].result}\n\nFonte: ${item.fonte}`)}
-                                style={{ marginTop: '10px', fontSize: '0.85rem' }}
-                            >
-                                Adicionar Ampliação na Construção
-                            </button>
+
                         </div>
                     )}
                 </div>
@@ -2837,880 +2764,558 @@ Gere exatamente mais TRÊS parágrafos detalhados ampliando essa ilustração, c
 };
 
 
-const ConstrucaoView = () => {
-    const [form, setForm] = useState({});
-    const [result, setResult] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
-
-    useEffect(() => {
-        const appendField = (field, text) => {
-            setForm(prev => {
-                const current = prev[field] || '';
-                return { ...prev, [field]: current ? current + '\n\n' + text : text };
-            });
-        };
-
-        const handlerTema = (e) => { if (e.detail) setForm(prev => ({ ...prev, temaCentral: e.detail })); };
-        const handlerPensamentos = (e) => { if (e.detail) appendField('pensamentos', e.detail); };
-        const handlerIlustracao = (e) => { if (e.detail) appendField('ilustracao', e.detail); };
-        const handlerApresentacao = (e) => { if (e.detail) appendField('apresentacaoCapitulo', e.detail); };
-        const handlerHistorica = (e) => { if (e.detail) appendField('infoHistorica', e.detail); };
-        const handlerPalavras = (e) => { if (e.detail) appendField('palavrasChave', e.detail); };
-        const handlerTeologica = (e) => { if (e.detail) appendField('expressoesTeologicas', e.detail); };
-        const handlerAplicacao = (e) => { if (e.detail) appendField('aplicacoes', e.detail); };
-
-        window.addEventListener('add-construction', handlerTema);
-        window.addEventListener('add-construction-pensamentos', handlerPensamentos);
-        window.addEventListener('add-construction-ilustracao', handlerIlustracao);
-        window.addEventListener('add-construction-apresentacao', handlerApresentacao);
-        window.addEventListener('add-construction-historica', handlerHistorica);
-        window.addEventListener('add-construction-palavras', handlerPalavras);
-        window.addEventListener('add-construction-teologica', handlerTeologica);
-        window.addEventListener('add-construction-aplicacao', handlerAplicacao);
-
-        return () => {
-            window.removeEventListener('add-construction', handlerTema);
-            window.removeEventListener('add-construction-pensamentos', handlerPensamentos);
-            window.removeEventListener('add-construction-ilustracao', handlerIlustracao);
-            window.removeEventListener('add-construction-apresentacao', handlerApresentacao);
-            window.removeEventListener('add-construction-historica', handlerHistorica);
-            window.removeEventListener('add-construction-palavras', handlerPalavras);
-            window.removeEventListener('add-construction-teologica', handlerTeologica);
-            window.removeEventListener('add-construction-aplicacao', handlerAplicacao);
-        };
-    }, []);
-
-    const handleChange = (e) => setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
-
-    const handleBuild = useCallback(async () => {
-        setLoading(true);
-        setError('');
-        setResult('');
-        try {
-            const prompt = `Persona: Você é um Educador Empático e mentor teológico. Seu tom é o de um professor que guia seus alunos com sabedoria, sendo instrutivo mas nunca autoritário. Você faz pesquisas sobre capítulos da Bíblia com rigor intelectual e fluidez narrativa.
-
-Projeto: A partir das informações postadas será construído um texto completo no final. Formate qualquer trecho de texto citado que estiver entre aspas em negrito utilizando os asteriscos do markdown (exemplo: **"texto aspeado"**).
-
-ESTRUTURA DO TEXTO:
-A) Inicie o texto com o pensamento inserido na caixa PENSAMENTOS. A apresentação deverá ser feita através de duas frases. A primeira frase deve apresentar a autoria e a segunda o pensamento citado de forma integral entre aspas. Use como base o exemplo a seguir: o teólogo (qualificação do autor, que pode ser escritor, político, filósofo...) João (nome do autor) é autor de um interessante pensamento que declara. 
-(caso não tenha sido selecionado nenhum pensamento, vá para o próximo item). 
-
-C) escreva de dois a três parágrafos contendo a ILUSTRAÇÃO postada na caixa ILUSTRAÇÃO. Ao iniciar esta seção, use a primeira frase para conectar o assunto da ilustração com o conteúdo do parágrafo anterior (caso não tenha sido selecionada nenhuma ilustração, vá para o próximo item). 
-
-D) escreva um breve parágrafo de transição entre os elementos da introdução com a seção do desenvolvimento.
-
-E) Síntese do capítulo: Escreva um parágrafo de apresentação do contexto geral do capítulo do texto bíblico usando as informações descritas na caixa APRESENTAÇÃO DO CAPÍTULO (caso a caixa esteja vazia, escreva um parágrafo de apresentação baseado no TEMA CENTRAL).
-
-F) Escreva uma breve parágrafo conectando a síntese do capítulo com o conteúdo do(s) versículo(s) que serão citados no próximo passo.
-
-G) Escreva uma frase de apresentação do texto bíblico baseando-se no exemplo a seguir: - Veja o que diz o verso X do capítulo X do livro X. (Se o texto bíblico for composto por mais de um versículo, escreva a frase no plural: Veja o que que os versos X do capítulo X do livro X.)
-- Após a frase de apresentação, terminada com dois pontos (:), coloque na íntegra na linha debaixo o TB (texto bíblico), que foi colocado na caixa do TEMA CENTRAL. 
-- A apresentação do texto bíblico deverá ser entre aspas.
-- Ao final do texto bíblico coloque a referência entre parênteses colocando o nome do livro, o capítulo e o(s) versículo(s). Exemplo: (2 Reis 24:1)
-
-H) Explicação do texto: Inicie com uma frase conectando esta seção com o texto bíblico citado anteriormente. Em seguida, dedique vários parágrafos para explorar o texto bíblico desenvolvendo as informações postadas nas caixas INFORMAÇÕES HISTÓRICAS, PALAVRAS-CHAVE e EXPRESSÕES TEOLÓGICAS. Sempre use frases de conexão entre os elementos, para que todos pareçam coesos.
-
-I) Conclusão: Escreva dois parágrafos que fechem o texto de forma coerente, conectando as informações anteriores com as sugestões presentes na seção APLICAÇÕES.
-Termine o último parágrafo com um Arremate Poético: use uma máxima ou frase de efeito que sirva como "âncora" para a memória do leitor.
-
-ESTILO DE ESCRITA OBRIGATÓRIO:
-- Tom de Educador Empático: O tom é de um mentor. É instrutivo, mas não autoritário.
-- Raciocínio Lógico: Use conectivos que demonstrem causa e consequência (ex: "Desta forma...", "Por isso...", "Perceba que...", "Como resultado...").
-- Interpelação do Leitor: Faça perguntas retóricas frequentes para engajar quem lê (ex: "Você já ouviu falar...?", "Qual o maior presente...?", "Como isso se aplica a nós hoje?").
-- Tom Didático-Persuasivo: O texto não busca apenas informar, mas transformar o comportamento através da lógica. Enfatize a responsabilidade individual, mostrando que as escolhas geram frutos inevitáveis.
-- Voz Ativa e Assertiva: Use frases curtas e diretas, evitando ambiguidades e mantendo um ritmo constante de leitura.
-- Elegância Formal: Mantenha a elegância sem ser excessivamente erudito. Evite jargões religiosos excessivos ou clichês sem explicação. 
-- Restrição: NÃO use uma linguagem infantil ou excessivamente simplista. O texto deve ser acessível tanto para acadêmicos quanto para o leitor comum.
-
-INFORMAÇÕES INSERIDAS:
-- TEMA CENTRAL: ${form.temaCentral || 'Não informado'}
-- APRESENTAÇÃO DO CAPÍTULO: ${form.apresentacaoCapitulo || 'Não informado'}
-- PENSAMENTOS: ${form.pensamentos || 'Não informado'}
-- ILUSTRAÇÃO: ${form.ilustracao || 'Não informado'}
-- INFORMAÇÕES HISTÓRICAS: ${form.infoHistorica || 'Não informado'}
-- PALAVRAS-CHAVE: ${form.palavrasChave || 'Não informado'}
-- EXPRESSÕES TEOLÓGICAS: ${form.expressoesTeologicas || 'Não informado'}
-- APLICAÇÕES: ${form.aplicacoes || 'Não informado'}
-            `;
-
-            const responseText = await generateAIContent({ prompt });
-            setResult(responseText);
-        } catch (e) {
-            setError(formatGeminiError(e, 'Falha ao construir o texto.'));
-        } finally {
-            setLoading(false);
-        }
-    }, [form]);
-
-    return (
-        <div className="tab-content">
-            <h2>Construção de Texto Devocional</h2>
-            <div className="grid-form">
-                <div className="form-section full-span">
-                    <h3>TEMA CENTRAL</h3>
-                    <textarea name="temaCentral" value={form.temaCentral || ''} onChange={handleChange} placeholder="Insira o tema e o texto bíblico..." />
-                </div>
-                <div className="form-section full-span">
-                    <h3>APRESENTAÇÃO DO CAPÍTULO</h3>
-                    <textarea name="apresentacaoCapitulo" value={form.apresentacaoCapitulo || ''} onChange={handleChange} placeholder="Apresentação do capítulo..." />
-                </div>
-                <div className="form-section full-span">
-                    <h3>PENSAMENTOS</h3>
-                    <textarea name="pensamentos" value={form.pensamentos || ''} onChange={handleChange} placeholder="Pensamento interessante com referência (Autor e Obra)..." />
-                </div>
-                <div className="form-section full-span">
-                    <h3>ILUSTRAÇÃO</h3>
-                    <textarea name="ilustracao" value={form.ilustracao || ''} onChange={handleChange} placeholder="Ilustração conectada ao tema..." />
-                </div>
-                <div className="form-section full-span">
-                    <h3>INFORMAÇÕES HISTÓRICAS</h3>
-                    <textarea name="infoHistorica" value={form.infoHistorica || ''} onChange={handleChange} placeholder="Contexto histórico e cultural da época..." />
-                </div>
-                <div className="form-section full-span">
-                    <h3>PALAVRAS-CHAVE</h3>
-                    <textarea name="palavrasChave" value={form.palavrasChave || ''} onChange={handleChange} placeholder="Termos originais (hebraico, aramaico ou grego) de curiosidade teológica..." />
-                </div>
-                <div className="form-section full-span">
-                    <h3>EXPRESSÕES TEOLÓGICAS</h3>
-                    <textarea name="expressoesTeologicas" value={form.expressoesTeologicas || ''} onChange={handleChange} placeholder="Expressões ou frases com peso teológico..." />
-                </div>
-                <div className="form-section full-span">
-                    <h3>APLICAÇÕES</h3>
-                    <textarea name="aplicacoes" value={form.aplicacoes || ''} onChange={handleChange} placeholder="Aplicações práticas (Atitudes, encorajamento, exemplos)..." />
-                </div>
-            </div>
-            <button onClick={handleBuild} disabled={loading} className="full-width-button">{loading ? 'Construindo...' : 'Construir Texto'}</button>
-            {loading && <LoadingSpinner />}
-            {error && <ErrorMessage message={error} />}
-            {result && (
-                <div className="card">
-                    <h3>Texto Devocional Gerado</h3>
-                    {result.split(/\n+/).filter(p => p.trim() !== '').map((p, i) => <p key={i} style={{ fontFamily: 'Arial', fontSize: '16px', lineHeight: '1.5', marginBottom: '1rem' }}>{parseBold(p)}</p>)}
-                    <div className="quote-actions" style={{ justifyContent: 'flex-end' }}>
-                        <button onClick={() => navigator.clipboard.writeText(result)}>Copiar</button>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-};
 
 
-const ChatView = () => {
-    const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; text: string; id: string }[]>(() => {
-        const saved = localStorage.getItem('chat_messages');
-        return saved ? JSON.parse(saved) : [];
-    });
-    const [input, setInput] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
-    const messagesEndRef = React.useRef<HTMLDivElement>(null);
 
-    useEffect(() => {
-        localStorage.setItem('chat_messages', JSON.stringify(messages));
-    }, [messages]);
 
-    useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages, loading]);
-
-    const handleSend = async () => {
-        if (!input.trim() || loading) return;
-        const userText = input.trim();
-        setInput('');
-        setError('');
-        
-        const userMsg = { role: 'user' as const, text: userText, id: Math.random().toString(36) };
-        setMessages(prev => [...prev, userMsg]);
-        setLoading(true);
-
-        try {
-            let conversationPrompt = "Você é um assistente de IA prestativo e inteligente. Responda à mensagem do usuário de forma clara e objetiva.\n\n";
-            const history = messages.slice(-6);
-            history.forEach(msg => {
-                conversationPrompt += `${msg.role === 'user' ? 'Usuário' : 'Assistente'}: ${msg.text}\n\n`;
-            });
-            conversationPrompt += `Usuário: ${userText}\n\nAssistente:`;
-
-            const responseText = await generateAIContent({ prompt: conversationPrompt });
-            const assistantMsg = { role: 'assistant' as const, text: responseText, id: Math.random().toString(36) };
-            setMessages(prev => [...prev, assistantMsg]);
-        } catch (e) {
-            setError(formatGeminiError(e, 'Erro ao enviar mensagem.'));
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleClear = () => {
-        if (window.confirm('Deseja realmente limpar o histórico do chat?')) {
-            setMessages([]);
-            localStorage.removeItem('chat_messages');
-        }
-    };
-
-    return (
-        <div className="tab-content">
-            <h2>Chat com a IA</h2>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                <span style={{ fontSize: '0.9rem', color: 'var(--text-light)' }}>
-                    Conectado à IA selecionada nas configurações globais.
-                </span>
-                <button onClick={handleClear} style={{ backgroundColor: '#e0e0e0', color: 'var(--text-color)', fontSize: '0.8rem', padding: '0.5rem 1rem' }}>
-                    Limpar Chat
-                </button>
-            </div>
-            
-            <div style={{ 
-                border: '1px solid var(--border-color)', 
-                borderRadius: '8px', 
-                padding: '1rem', 
-                height: '400px', 
-                overflowY: 'auto', 
-                backgroundColor: '#fafafa',
-                marginBottom: '1rem',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '0.75rem'
-            }}>
-                {messages.length === 0 && (
-                    <div style={{ textAlign: 'center', color: 'var(--text-light)', marginTop: '8rem' }}>
-                        Nenhuma mensagem enviada. Digite algo abaixo para conversar com a IA!
-                    </div>
-                )}
-                {messages.map(msg => (
-                    <div key={msg.id} style={{ 
-                        alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                        maxWidth: '80%',
-                        backgroundColor: msg.role === 'user' ? 'var(--primary-color)' : '#eeeeee',
-                        color: msg.role === 'user' ? 'white' : 'var(--text-color)',
-                        padding: '0.75rem 1rem',
-                        borderRadius: msg.role === 'user' ? '12px 12px 0 12px' : '12px 12px 12px 0',
-                        boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
-                        position: 'relative'
-                    }}>
-                        <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.95rem', lineHeight: '1.4' }}>
-                            {msg.role === 'user' ? msg.text : parseBold(msg.text)}
-                        </div>
-                        {msg.role === 'assistant' && (
-                            <div className="quote-actions" style={{ 
-                                marginTop: '0.5rem', 
-                                borderTop: '1px solid #ddd', 
-                                paddingTop: '0.5rem',
-                                justifyContent: 'flex-end',
-                                gap: '8px',
-                                display: 'flex'
-                            }}>
-                                <button 
-                                    onClick={() => navigator.clipboard.writeText(msg.text)}
-                                    style={{ padding: '2px 8px', fontSize: '0.7rem', backgroundColor: '#e0e0e0', color: 'var(--text-color)', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                                >
-                                    Copiar
-                                </button>
-                                <button 
-                                    onClick={(e) => handleAddClick(e, 'add-construction-ilustracao', msg.text)}
-                                    style={{ padding: '2px 8px', fontSize: '0.7rem', backgroundColor: '#e0e0e0', color: 'var(--text-color)', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                                >
-                                    Adicionar na Construção
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                ))}
-                {loading && <LoadingSpinner />}
-                {error && <ErrorMessage message={error} />}
-                <div ref={messagesEndRef} />
-            </div>
-
-            <div className="form-group" style={{ display: 'flex', gap: '0.5rem' }}>
-                <input 
-                    type="text" 
-                    value={input} 
-                    onChange={e => setInput(e.target.value)} 
-                    onKeyDown={e => e.key === 'Enter' && handleSend()} 
-                    placeholder="Faça uma pergunta ou peça algo para a IA..." 
-                    disabled={loading}
-                    style={{ flexGrow: 1 }}
-                />
-                <button onClick={handleSend} disabled={loading}>{loading ? 'Enviando...' : 'Enviar'}</button>
-            </div>
-        </div>
-    );
-};
 
 
 // Helper: flat list of all books
 const ALL_BOOKS = Object.values(NAA_BOOKS).flat();
 
-const ImportarView = () => {
-    // --- Browser State ---
-    const [browseBook, setBrowseBook] = useState<any>(null);
-    const [browseChapter, setBrowseChapter] = useState<number | null>(null);
-    const [browseVerse, setBrowseVerse] = useState<number | null>(null);
-    const [browseCommentaries, setBrowseCommentaries] = useState<any[]>([]);
-    const [openCommentaryId, setOpenCommentaryId] = useState<Record<string, boolean>>({});
-    const [browseLoading, setBrowseLoading] = useState(false);
-    const [browseError, setBrowseError] = useState('');
 
-    // --- Anexar Modal State ---
-    const [showAnexarModal, setShowAnexarModal] = useState(false);
-    const [formAuthor, setFormAuthor] = useState('');
-    const [formBook, setFormBook] = useState(ALL_BOOKS[0]?.name || '');
-    const [formChapter, setFormChapter] = useState(1);
-    const [formVerse, setFormVerse] = useState('');
-    const [formText, setFormText] = useState('');
-    const [formSaving, setFormSaving] = useState(false);
-    const [formError, setFormError] = useState('');
-    const [formSuccess, setFormSuccess] = useState('');
 
-    // --- Escanear (PDF) State ---
-    const [scanLoading, setScanLoading] = useState(false);
-    const [scanError, setScanError] = useState('');
-    const [scanAuthor, setScanAuthor] = useState('');
-    const [scanProgress, setScanProgress] = useState({ current: 0, total: 0 });
-    const [parsedCommentaries, setParsedCommentaries] = useState<any[]>([]);
-    const [saving, setSaving] = useState(false);
-    const [saveError, setSaveError] = useState('');
-    const [saveSuccess, setSaveSuccess] = useState('');
 
-    // --- Browse Logic ---
-    const loadBrowseCommentaries = async (book: any, chapter: number, verse: number | null = browseVerse) => {
-        if (!isSupabaseConfigured()) { setBrowseError('Supabase não configurado.'); return; }
-        setBrowseLoading(true);
-        setBrowseError('');
-        setBrowseCommentaries([]);
-        setOpenCommentaryId({});
-        try {
-            let query = supabase
-                .from('commentaries')
-                .select('*')
-                .eq('book', book.name)
-                .eq('chapter', chapter);
+// --- Main App Component ---
 
-            if (verse !== null) {
-                query = query.eq('verse', verse);
-            }
 
-            const { data, error } = await query.order('verse', { ascending: true, nullsFirst: true });
-            if (error) throw error;
-            setBrowseCommentaries(data || []);
-        } catch (e: any) {
-            setBrowseError(`Erro ao buscar comentários: ${e.message || e}`);
-        } finally {
-            setBrowseLoading(false);
-        }
+
+const LeftSidebar = ({ selectedBook, setSelectedBook, selectedChapter, setSelectedChapter, selectedVerse, setSelectedVerse }) => {
+    const allBooks = Object.values(BIBLIA_STRUCTURE).flatMap(t => t.col1.concat(t.col2 || []).filter(Boolean));
+    const [searchTerm, setSearchTerm] = useState('');
+    const filteredBooks = searchTerm ? allBooks.filter(b => b.name.toLowerCase().includes(searchTerm.toLowerCase())) : allBooks;
+
+    const handleSelectBook = (book) => {
+        setSelectedBook(book);
+        setSelectedChapter(null);
+        setSelectedVerse(null);
     };
-
-    const handleBrowseBook = (book: any) => {
-        setBrowseBook(book);
-        setBrowseChapter(null);
-        setBrowseVerse(null);
-        setBrowseCommentaries([]);
-        setBrowseError('');
-    };
-
-    const handleBrowseChapter = (ch: number) => {
-        setBrowseChapter(ch);
-        setBrowseVerse(null);
-        if (browseBook) loadBrowseCommentaries(browseBook, ch, null);
-    };
-
-    const handleBrowseVerse = (v: number | null) => {
-        setBrowseVerse(v);
-        if (browseBook && browseChapter) {
-            loadBrowseCommentaries(browseBook, browseChapter, v);
-        }
-    };
-
-    // --- Anexar Modal Logic ---
-    const selectedBookObj = ALL_BOOKS.find(b => b.name === formBook) || ALL_BOOKS[0];
-    const formBookChapters = selectedBookObj?.chapters || 1;
-
-    const handleAnexarSave = async () => {
-        if (!formAuthor.trim() || !formText.trim()) {
-            setFormError('Preencha pelo menos Autor e Texto.'); return;
-        }
-        setFormSaving(true); setFormError(''); setFormSuccess('');
-        try {
-            const { error: err } = await supabase.from('commentaries').insert([{
-                author: formAuthor.trim(),
-                book: formBook,
-                chapter: formChapter,
-                verse: formVerse ? parseInt(formVerse, 10) : null,
-                text: formText.trim()
-            }]);
-            if (err) throw err;
-            setFormSuccess('Comentário adicionado com sucesso!');
-            setFormText(''); setFormVerse(''); setFormAuthor('');
-            // Reload browse if same passage
-            if (browseBook?.name === formBook && browseChapter === formChapter) {
-                loadBrowseCommentaries(browseBook, formChapter);
-            }
-            setTimeout(() => { setShowAnexarModal(false); setFormSuccess(''); }, 1500);
-        } catch (e: any) {
-            setFormError(`Erro: ${e.message || e}`);
-        } finally { setFormSaving(false); }
-    };
-
-    // --- PDF Scan Logic ---
-    const loadPdfJs = (): Promise<any> => {
-        return new Promise((resolve, reject) => {
-            if ((window as any).pdfjsLib) { resolve((window as any).pdfjsLib); return; }
-            const script = document.createElement('script');
-            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-            script.onload = () => {
-                const lib = (window as any).pdfjsLib;
-                lib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-                resolve(lib);
-            };
-            script.onerror = () => reject(new Error('Falha ao carregar PDF.js'));
-            document.head.appendChild(script);
-        });
-    };
-
-    const handleScanPdf = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        e.target.value = '';
-        if (!file) return;
-        if (!scanAuthor.trim()) { setScanError('Defina o autor antes de escanear.'); return; }
-
-        setScanLoading(true); setScanError(''); setParsedCommentaries([]);
-        setScanProgress({ current: 0, total: 0 });
-        try {
-            const pdfjsLib = await loadPdfJs();
-            const arrayBuffer = await file.arrayBuffer();
-            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-
-            // 1. Extract ALL pages
-            let fullText = '';
-            for (let p = 1; p <= pdf.numPages; p++) {
-                const page = await pdf.getPage(p);
-                const content = await page.getTextContent();
-                fullText += content.items.map((i: any) => i.str).join(' ') + '\n';
-            }
-
-            // 2. Split into ~4000-word chunks (safe for Ollama context)
-            const CHUNK_WORDS = 4000;
-            const words = fullText.split(/\s+/);
-            const chunks: string[] = [];
-            for (let i = 0; i < words.length; i += CHUNK_WORDS) {
-                chunks.push(words.slice(i, i + CHUNK_WORDS).join(' '));
-            }
-
-            setScanProgress({ current: 0, total: chunks.length });
-
-            // 3. Process each chunk sequentially, accumulate results
-            const allCommentaries: any[] = [];
-            for (let idx = 0; idx < chunks.length; idx++) {
-                setScanProgress({ current: idx + 1, total: chunks.length });
-                const chunk = chunks[idx];
-
-                const prompt = `Você é um analisador de comentários bíblicos. Leia o trecho abaixo (parte ${idx + 1} de ${chunks.length} de um documento maior) e extraia APENAS os comentários sobre passagens bíblicas específicas que estejam NESTE trecho.
-Para cada passagem encontrada, retorne: o Livro (em português, por extenso), o Capítulo (número), o Versículo (número ou null se for sobre o capítulo inteiro), e o Texto do comentário.
-Use o autor "${scanAuthor}" para todos os registros.
-Se não houver nenhuma passagem bíblica neste trecho, retorne um array vazio [].
-
-Trecho do PDF:
-"""
-${chunk}
-"""
-
-Responda APENAS em JSON com um array de objetos com as chaves: "author", "book", "chapter", "verse", "text". Sem markdown, sem explicações, apenas JSON puro.`;
-
-                try {
-                    const responseText = await generateAIContent({ prompt, isJson: true });
-                    const parsed = parseAIJsonArray(responseText);
-                    allCommentaries.push(...parsed.map((item: any) => ({
-                        ...item,
-                        id: Math.random().toString(36)
-                    })));
-                    // Update table incrementally so user can see progress
-                    setParsedCommentaries([...allCommentaries]);
-                } catch (chunkErr: any) {
-                    // Don't abort — log error for this chunk and continue
-                    console.warn(`Erro no segmento ${idx + 1}:`, chunkErr);
-                }
-            }
-
-            if (allCommentaries.length === 0) {
-                setScanError('Nenhum comentário bíblico identificado no documento. Verifique se o PDF contém texto selecionável (não é uma imagem escaneada).');
-            }
-        } catch (e: any) {
-            setScanError(formatGeminiError(e, 'Falha ao escanear o PDF.'));
-        } finally {
-            setScanLoading(false);
-            setScanProgress({ current: 0, total: 0 });
-        }
-    };
-
-    const handleEditRow = (id: string, field: string, value: any) => {
-        setParsedCommentaries(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
-    };
-
-    const handleDeleteRow = (id: string) => {
-        setParsedCommentaries(prev => prev.filter(item => item.id !== id));
-    };
-
-    const handleAdicionarTabela = async () => {
-        if (parsedCommentaries.length === 0) { setSaveError('Nenhum item na tabela para salvar.'); return; }
-        if (!isSupabaseConfigured()) { setSaveError('Supabase não configurado.'); return; }
-        setSaving(true); setSaveError(''); setSaveSuccess('');
-        try {
-            const dataToInsert = parsedCommentaries.map(({ id, ...rest }) => ({
-                author: rest.author,
-                book: rest.book,
-                chapter: parseInt(rest.chapter, 10),
-                verse: rest.verse ? parseInt(rest.verse, 10) : null,
-                text: rest.text
-            }));
-            const { error: err } = await supabase.from('commentaries').insert(dataToInsert);
-            if (err) throw err;
-            setSaveSuccess(`✅ ${dataToInsert.length} comentário(s) inseridos no Supabase com sucesso!`);
-            setParsedCommentaries([]);
-        } catch (e: any) {
-            setSaveError(`Erro ao salvar: ${e.message || e}`);
-        } finally { setSaving(false); }
-    };
-
-    // --- Render Helpers ---
-    const sectionLabel = { fontWeight: 'bold' as const, fontSize: '0.75rem', color: '#0d47a1', textTransform: 'uppercase' as const, letterSpacing: '0.05em', marginBottom: '6px', display: 'block' };
-    const panelStyle = { border: '1px solid var(--border-color)', borderRadius: '10px', padding: '1.25rem', backgroundColor: 'white', marginBottom: '1.5rem' };
 
     return (
-        <div className="tab-content">
-            <h2>Obras</h2>
-
-            {/* ===== NAVEGADOR ===== */}
-            <div style={panelStyle}>
-                <h3 style={{ marginTop: 0, marginBottom: '1rem', color: '#1a237e' }}>📚 Navegador de Comentários</h3>
-
-                <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flexGrow: 1, minWidth: '180px' }}>
-                        <label style={sectionLabel}>Livro</label>
-                        <select
-                            value={browseBook?.name || ''}
-                            onChange={e => {
-                                const b = ALL_BOOKS.find(bk => bk.name === e.target.value);
-                                if (b) handleBrowseBook(b);
-                            }}
-                            style={{ padding: '8px', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '0.9rem' }}
+        <>
+            <div style={{ padding: '0.2rem' }}>
+                <input 
+                    type="text" 
+                    placeholder="Busca ex: Gen 1" 
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    style={{ marginBottom: '0.5rem', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc', width: '100%' }}
+                />
+            </div>
+            <div className="selection-box">
+                <h3>LIVRO</h3>
+                <div className="book-list">
+                    {filteredBooks.map(book => (
+                        <div 
+                            key={book.name} 
+                            className={`book-item ${selectedBook?.name === book.name ? 'active' : ''}`}
+                            onClick={() => handleSelectBook(book)}
                         >
-                            <option value="">— Selecione um livro —</option>
-                            {Object.entries(NAA_BOOKS).map(([testament, books]) => (
-                                <optgroup key={testament} label={testament}>
-                                    {books.map(b => <option key={b.name} value={b.name}>{b.name}</option>)}
-                                </optgroup>
-                            ))}
-                        </select>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flexGrow: 1, minWidth: '130px' }}>
-                        <label style={sectionLabel}>Capítulo</label>
-                        <select
-                            value={browseChapter ?? ''}
-                            onChange={e => handleBrowseChapter(parseInt(e.target.value, 10))}
-                            disabled={!browseBook}
-                            style={{ padding: '8px', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '0.9rem' }}
-                        >
-                            <option value="">— Capítulo —</option>
-                            {browseBook && Array.from({ length: browseBook.chapters }, (_, i) => i + 1).map(n => (
-                                <option key={n} value={n}>{n}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flexGrow: 1, minWidth: '150px' }}>
-                        <label style={sectionLabel}>Versículo (Opcional)</label>
-                        <select
-                            value={browseVerse ?? ''}
-                            onChange={e => {
-                                const val = e.target.value === '' ? null : parseInt(e.target.value, 10);
-                                handleBrowseVerse(val);
-                            }}
-                            disabled={!browseChapter}
-                            style={{ padding: '8px', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '0.9rem' }}
-                        >
-                            <option value="">— Todos (Capítulo) —</option>
-                            {Array.from({ length: 176 }, (_, i) => i + 1).map(n => (
-                                <option key={n} value={n}>Versículo {n}</option>
-                            ))}
-                        </select>
-                    </div>
+                            {book.name}
+                        </div>
+                    ))}
                 </div>
-
-                {browseLoading && <LoadingSpinner />}
-                {browseError && <ErrorMessage message={browseError} />}
-
-                {browseChapter && !browseLoading && (
-                    browseCommentaries.length === 0 ? (
-                        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-light)', backgroundColor: '#f5f5f5', borderRadius: '8px' }}>
-                            Nenhum comentário encontrado para <strong>{browseBook?.name} {browseChapter}{browseVerse ? `:${browseVerse}` : ''}</strong>.<br />
-                            <span style={{ fontSize: '0.85rem' }}>Use o botão <em>Anexar</em> ou <em>Escanear</em> abaixo para adicionar comentários.</span>
+            </div>
+            <div className="selection-box">
+                <h3>CAPÍTULO</h3>
+                <div className="number-grid">
+                    {selectedBook ? Array.from({ length: selectedBook.chapters }, (_, i) => i + 1).map(num => (
+                        <div 
+                            key={num}
+                            className={`number-btn ${selectedChapter === num ? 'active' : ''}`}
+                            onClick={() => { setSelectedChapter(num); setSelectedVerse(null); }}
+                        >
+                            {num}
                         </div>
-                    ) : (
-                        <div>
-                            <p style={{ fontSize: '0.85rem', color: 'var(--text-light)', marginBottom: '0.75rem' }}>
-                                <strong>{browseCommentaries.length}</strong> comentário(s) encontrado(s) para <strong>{browseBook?.name} {browseChapter}{browseVerse ? `:${browseVerse}` : ''}</strong> (clique em um comentário para abrir):
-                            </p>
-                            {browseCommentaries.map((c, i) => {
-                                const itemKey = c.id || `comm-${i}`;
-                                const isOpen = !!openCommentaryId[itemKey];
-                                return (
-                                    <div
-                                        key={itemKey}
-                                        style={{
-                                            borderLeft: '4px solid #1565c0',
-                                            backgroundColor: '#e3f2fd',
-                                            borderRadius: '8px',
-                                            marginBottom: '0.75rem',
-                                            overflow: 'hidden',
-                                            boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
-                                        }}
-                                    >
-                                        <div
-                                            onClick={() => setOpenCommentaryId(prev => ({ ...prev, [itemKey]: !prev[itemKey] }))}
-                                            style={{
-                                                padding: '12px 15px',
-                                                cursor: 'pointer',
-                                                display: 'flex',
-                                                justify: 'space-between',
-                                                alignItems: 'center',
-                                                backgroundColor: isOpen ? '#bbdefb' : '#e3f2fd',
-                                                transition: 'background-color 0.2s',
-                                                userSelect: 'none'
-                                            }}
-                                        >
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                                                <span style={{ fontWeight: 'bold', fontSize: '0.92rem', color: '#0d47a1' }}>
-                                                    👤 {c.author}
+                    )) : <div style={{ color: '#aaa', fontSize: '0.8rem', gridColumn: '1 / -1', textAlign: 'center', padding: '1rem 0' }}>Selecione um livro</div>}
+                </div>
+            </div>
+            <div className="selection-box">
+                <h3>VERSÍCULO</h3>
+                <div className="number-grid">
+                    {selectedChapter && selectedBook ? Array.from({ length: 50 }, (_, i) => i + 1).map(num => (
+                        <div 
+                            key={num}
+                            className={`number-btn ${selectedVerse === num ? 'active' : ''}`}
+                            onClick={() => setSelectedVerse(num)}
+                        >
+                            {num}
+                        </div>
+                    )) : <div style={{ color: '#aaa', fontSize: '0.8rem', gridColumn: '1 / -1', textAlign: 'center', padding: '1rem 0' }}>Selecione um capítulo</div>}
+                </div>
+            </div>
+        </>
+    );
+};
+
+
+const CenterContent = ({ selectedBook, selectedChapter, selectedVerse }) => {
+    const [verses, setVerses] = useState([]);
+    const [bhsWordsByVerse, setBhsWordsByVerse] = useState({});
+    const [loading, setLoading] = useState(false);
+    const [activeTab, setActiveTab] = useState('Capítulo');
+    const [expandedBlock, setExpandedBlock] = useState<string | null>(null);
+    
+    // Commentaries State
+    const [comentarios, setComentarios] = useState([]);
+    const [loadingComentarios, setLoadingComentarios] = useState(false);
+    const [selectedCommentaries, setSelectedCommentaries] = useState({ 'Todos': true });
+
+    // Deep Analysis State for NAA
+    const [selectedVerseWordIndex, setSelectedVerseWordIndex] = useState(null); // format: "verseNum-wordIndex"
+    const [verseWordDeepAnalysis, setVerseWordDeepAnalysis] = useState({});
+    const [deepAnalysisModalOpen, setDeepAnalysisModalOpen] = useState(false);
+    const [currentDeepAnalysis, setCurrentDeepAnalysis] = useState(null);
+
+    // Interlinear State for BHS
+    const [selectedBhsWord, setSelectedBhsWord] = useState(null);
+
+    const externalRefChapter = (selectedBook && selectedChapter) ? `${selectedBook.map || selectedBook.name} ${selectedChapter}` : '';
+    const externalRefVerse = (selectedBook && selectedChapter && selectedVerse) ? `${selectedBook.map || selectedBook.name} ${selectedChapter}:${selectedVerse}` : '';
+    
+    // Reset selections on ref change
+    useEffect(() => {
+        setSelectedVerseWordIndex(null);
+        setVerseWordDeepAnalysis({});
+        setDeepAnalysisModalOpen(false);
+        setCurrentDeepAnalysis(null);
+        setSelectedBhsWord(null);
+    }, [externalRefChapter, externalRefVerse]);
+
+    useEffect(() => {
+        if (!externalRefChapter) {
+            setVerses([]);
+            setBhsWordsByVerse({});
+            return;
+        }
+        
+        const fetchContent = async () => {
+            setLoading(true);
+            try {
+                // Fetch NAA Text
+                const text = await getBibleTextFromRef(externalRefVerse || externalRefChapter);
+                const versesArray = [];
+                if (text && !text.startsWith("Capítulo não encontrado")) {
+                    // Extract verses
+                    const lines = text.split(/\r?\n/).filter(l => l.trim());
+                    for (const line of lines) {
+                        const match = line.trim().match(/^\*\*(\d+)\*\*\s*(.*)$/);
+                        if (match) {
+                            versesArray.push({ num: parseInt(match[1], 10), text: match[2] });
+                        } else if (versesArray.length === 0 && line.trim()) {
+                            // Single verse without number, assume 1 or selectedVerse
+                            versesArray.push({ num: selectedVerse || 1, text: line.trim() });
+                        }
+                    }
+                }
+                setVerses(versesArray);
+
+                // Fetch BHS Text for the chapter
+                const match = externalRefChapter.match(/^(.+?)\s+(\d+)/);
+                if (match) {
+                    const bookName = match[1].trim();
+                    const chapterNum = parseInt(match[2], 10);
+                    const bookIdx = getHebrewBookIndex(bookName);
+                    if (bookIdx !== -1) {
+                        const response = await fetch(`/api/hebrew-bible?book=${bookIdx + 1}&chapter=${chapterNum}`);
+                        if (response.ok) {
+                            const json = await response.json();
+                            const words = json.data || [];
+                            const map = {};
+                            words.forEach(w => {
+                                if (!map[w.verse]) map[w.verse] = [];
+                                map[w.verse].push(w);
+                            });
+                            // If user selected a specific verse, filter the map to only contain that verse
+                            if (selectedVerse) {
+                                setBhsWordsByVerse({ [selectedVerse]: map[selectedVerse] || [] });
+                            } else {
+                                setBhsWordsByVerse(map);
+                            }
+                        } else {
+                            setBhsWordsByVerse({});
+                        }
+                    } else {
+                         setBhsWordsByVerse({});
+                    }
+                }
+            } catch (e) {
+                console.error(e);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchContent();
+    }, [externalRefChapter, externalRefVerse]);
+
+    // Handle Commentaries Tab activation
+    useEffect(() => {
+        if (activeTab === 'Comentários' && externalRefChapter) {
+            const fetchComments = async () => {
+                setLoadingComentarios(true);
+                try {
+                    const targetRefForDb = (selectedBook && selectedChapter) ? `${selectedBook.name} ${selectedChapter}${selectedVerse ? ':'+selectedVerse : ''}` : (externalRefVerse || externalRefChapter);
+                    const res = await fetchCommentaries(targetRefForDb);
+                    setComentarios(res);
+                    // Reset checkboxes
+                    setSelectedCommentaries({ 'Todos': true });
+                } catch (e) {
+                    console.error('Erro ao buscar comentários', e);
+                } finally {
+                    setLoadingComentarios(false);
+                }
+            };
+            fetchComments();
+        }
+    }, [activeTab, externalRefChapter, externalRefVerse]);
+
+    const handleCommentaryCheck = (author) => {
+        if (author === 'Todos') {
+            setSelectedCommentaries({ 'Todos': true });
+        } else {
+            setSelectedCommentaries(prev => {
+                const next = { ...prev, [author]: !prev[author] };
+                if (next['Todos']) next['Todos'] = false;
+                // Se tudo desmarcado, marca Todos automaticamente? (Opção de design)
+                const anyChecked = Object.keys(next).some(k => k !== 'Todos' && next[k]);
+                if (!anyChecked) next['Todos'] = true;
+                return next;
+            });
+        }
+    };
+
+    const handleVerseWordDeepAnalysis = async (verseNum, wordIndex, wordText) => {
+        setSelectedVerseWordIndex(null);
+        const cleanWord = wordText.replace(/[.,;!?()]/g, '').trim();
+        const targetRef = `${selectedBook.map || selectedBook.name} ${selectedChapter}:${verseNum}`;
+        
+        setDeepAnalysisModalOpen(true);
+        setCurrentDeepAnalysis({ loading: true, word: cleanWord });
+
+        try {
+            const prompt = `Faça uma análise profunda da palavra "${cleanWord}" no contexto do versículo ${targetRef}. 
+Siga estritamente estes 6 passos de análise. Retorne um JSON contendo a palavra original (em hebraico/aramaico/grego), sua transliteração, como ela aparece na tradução em português, e um array de objetos "passos", onde cada objeto representa um passo com "titulo" e "conteudo".
+Passos obrigatórios:
+A) Análise Morfológica (A Estrutura) - Foque na forma, estrutura e etiquetas gramaticais.
+B) Análise Sintática (A Relação) - Como a palavra se conecta na frase, sujeito, predicado, etc.
+C) Análise Semântica (O Significado) - Significado no contexto cultural, histórico e literário.
+D) Análise Etimológica (A Origem) - Raiz da palavra e sua formação histórica.
+E) Análise de Contexto Literário e Histórico - Cultura e gênero literário que a envolve.
+F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões doutrinárias.`;
+
+            const responseText = await generateAIContent({
+                prompt,
+                isJson: true,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            palavraOriginal: { type: Type.STRING },
+                            transliteracao: { type: Type.STRING },
+                            palavraNoVersiculo: { type: Type.STRING },
+                            passos: {
+                                type: Type.ARRAY,
+                                items: {
+                                    type: Type.OBJECT,
+                                    properties: {
+                                        titulo: { type: Type.STRING },
+                                        conteudo: { type: Type.STRING }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            const cleanJson = responseText.replace(/^```json\s*/, '').replace(/```\s*$/, '').trim();
+            const parsed = JSON.parse(cleanJson);
+            setCurrentDeepAnalysis({ loading: false, result: parsed, word: cleanWord });
+        } catch (e) {
+            setCurrentDeepAnalysis({ loading: false, error: formatGeminiError(e, 'Falha ao realizar análise profunda.'), word: cleanWord });
+        }
+    };
+
+    const displayTitle = selectedBook ? `${selectedBook.name} ${selectedChapter || ''}${selectedVerse ? ':'+selectedVerse : ''}` : 'Selecione um texto bíblico no painel lateral';
+
+    // Get active comments
+    const activeCommentaries = comentarios.filter(c => selectedCommentaries['Todos'] || selectedCommentaries[c.author]);
+    const authors = Array.from(new Set(comentarios.map(c => c.author)));
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '1rem', position: 'relative' }}>
+            
+            <div className="reading-box" style={{ 
+                flex: expandedBlock === 'reading' ? '1 1 100%' : '1 1 35%', 
+                minHeight: '15vh', 
+                overflowY: 'auto',
+                position: expandedBlock === 'reading' ? 'absolute' : 'relative',
+                top: expandedBlock === 'reading' ? 0 : 'auto',
+                left: expandedBlock === 'reading' ? 0 : 'auto',
+                right: expandedBlock === 'reading' ? 0 : 'auto',
+                bottom: expandedBlock === 'reading' ? '20px' : 'auto',
+                zIndex: expandedBlock === 'reading' ? 10 : 1,
+                opacity: expandedBlock === 'analysis' ? 0.3 : 1 
+            }}>
+                <button 
+                    onClick={() => setExpandedBlock(expandedBlock === 'reading' ? null : 'reading')}
+                    style={{
+                        position: 'absolute', top: '10px', right: '10px',
+                        width: '32px', height: '32px', fontSize: '1.2rem', 
+                        backgroundColor: 'transparent', color: '#616161', border: 'none', 
+                        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        zIndex: 20
+                    }}
+                    title={expandedBlock === 'reading' ? "Restaurar" : "Expandir"}
+                >
+                    {expandedBlock === 'reading' ? '–' : '☐'}
+                </button>
+                {loading ? <LoadingSpinner /> : (
+                    verses.length === 0 ? <div style={{color: '#666'}}>Texto não encontrado.</div> :
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                        {verses.map(v => (
+                            <div key={v.num} style={{ borderBottom: '1px dashed #e1eaf5', paddingBottom: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                {/* NAA Text */}
+                                <p style={{ margin: 0, fontSize: '16px', lineHeight: '1.7', textAlign: 'left' }}>
+                                    <strong>{v.num} </strong>
+                                    {v.text.split(/(\s+)/).map((part, index) => {
+                                        if (!part.trim()) return <span key={index}>{part}</span>;
+                                        const keyId = `${v.num}-${index}`;
+                                        return (
+                                            <span key={index} style={{ position: 'relative', display: 'inline-block' }}>
+                                                <span
+                                                    onClick={() => setSelectedVerseWordIndex(selectedVerseWordIndex === keyId ? null : keyId)}
+                                                    style={{ 
+                                                        cursor: 'pointer', 
+                                                        padding: '2px', 
+                                                        borderRadius: '3px',
+                                                        backgroundColor: selectedVerseWordIndex === keyId ? '#e0f7fa' : 'transparent',
+                                                        transition: 'background-color 0.2s'
+                                                    }}
+                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = selectedVerseWordIndex === keyId ? '#e0f7fa' : '#f5f5f5'}
+                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = selectedVerseWordIndex === keyId ? '#e0f7fa' : 'transparent'}
+                                                >
+                                                    {parseBold(part)}
                                                 </span>
-                                                <span style={{ fontSize: '0.8rem', color: '#546e7a', backgroundColor: 'white', padding: '2px 8px', borderRadius: '12px', border: '1px solid #b0bec5' }}>
-                                                    {c.verse ? `Versículo ${c.verse}` : 'Capítulo inteiro'}
-                                                </span>
-                                            </div>
-                                            <span style={{ fontSize: '0.85rem', color: '#0d47a1', fontWeight: 'bold' }}>
-                                                {isOpen ? '▲ Ocultar' : '▼ Ver Comentário'}
+                                                {selectedVerseWordIndex === keyId && (
+                                                    <div style={{
+                                                        position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
+                                                        backgroundColor: 'white', border: '1px solid #ccc', boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+                                                        borderRadius: '4px', padding: '8px', zIndex: 10, marginTop: '4px', whiteSpace: 'nowrap'
+                                                    }}>
+                                                        <button 
+                                                            onClick={() => handleVerseWordDeepAnalysis(v.num, index, part)}
+                                                            style={{ padding: '6px 12px', fontSize: '0.85rem', margin: 0, backgroundColor: '#1565C0', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                                                        >
+                                                            Análise Profunda
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </span>
-                                        </div>
-
-                                        {isOpen && (
-                                            <div style={{ padding: '15px', backgroundColor: 'white', borderTop: '1px solid #90caf9' }}>
-                                                <p style={{ margin: 0, fontSize: '0.92rem', lineHeight: '1.6', color: '#212121', whitespace: 'pre-wrap' }}>{c.text}</p>
-                                                <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'flex-end' }}>
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleAddClick(e, 'add-construction', `Comentário de ${c.author} (${browseBook?.name} ${browseChapter}${c.verse ? ':' + c.verse : ''}):\n${c.text}`);
-                                                        }}
-                                                        style={{ fontSize: '0.82rem', padding: '6px 12px', backgroundColor: '#1565c0', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                                                    >
-                                                        Adicionar na Construção
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        )}
+                                        );
+                                    })}
+                                </p>
+                                
+                                {/* BHS Text */}
+                                {bhsWordsByVerse[v.num] && bhsWordsByVerse[v.num].length > 0 && (
+                                    <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: '10px 6px', alignItems: 'center', direction: 'rtl', textAlign: 'right', backgroundColor: '#edf4fc', padding: '8px 12px', borderRadius: '8px', borderRight: '3px solid #2b569a' }}>
+                                        {bhsWordsByVerse[v.num].map((word, idx) => (
+                                            <span
+                                                key={idx}
+                                                onClick={() => setSelectedBhsWord(word)}
+                                                title={word.gloss || ''}
+                                                style={{
+                                                    fontFamily: "'SBL BibLit', 'SBL Hebrew', 'Times New Roman', serif",
+                                                    fontSize: '1.75rem',
+                                                    cursor: 'pointer',
+                                                    padding: '2px 6px',
+                                                    borderRadius: '6px',
+                                                    backgroundColor: selectedBhsWord?.sort === word.sort ? '#fff' : 'transparent',
+                                                    color: selectedBhsWord?.sort === word.sort ? '#0d47a1' : '#212121',
+                                                    transition: 'all 0.15s ease',
+                                                    borderBottom: selectedBhsWord?.sort === word.sort ? '3px solid #2b569a' : '3px solid transparent',
+                                                    lineHeight: '2.4rem'
+                                                }}
+                                                onMouseOver={e => {
+                                                    if (selectedBhsWord?.sort !== word.sort) {
+                                                        e.currentTarget.style.backgroundColor = '#fff';
+                                                        e.currentTarget.style.color = '#2b569a';
+                                                    }
+                                                }}
+                                                onMouseOut={e => {
+                                                    if (selectedBhsWord?.sort !== word.sort) {
+                                                        e.currentTarget.style.backgroundColor = 'transparent';
+                                                        e.currentTarget.style.color = '#212121';
+                                                    }
+                                                }}
+                                                dangerouslySetInnerHTML={{ __html: word.word }}
+                                            />
+                                        ))}
                                     </div>
-                                );
-                            })}
-                        </div>
-                    )
+                                )}
+                            </div>
+                        ))}
+                    </div>
                 )}
             </div>
-
-            {/* ===== BOTÕES DE AÇÃO ===== */}
-            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
-                <button
-                    onClick={() => { setShowAnexarModal(true); setFormError(''); setFormSuccess(''); }}
-                    style={{ flex: 1, minWidth: '160px', padding: '14px 20px', backgroundColor: '#1565c0', color: 'white', borderRadius: '8px', fontSize: '1rem', fontWeight: 'bold', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-                >
-                    📎 Anexar
-                </button>
-
-                <label style={{ flex: 1, minWidth: '160px' }}>
-                    <div style={{ padding: '14px 20px', backgroundColor: '#6a1b9a', color: 'white', borderRadius: '8px', fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                        {scanLoading
-                            ? (scanProgress.total > 0
-                                ? `⏳ Segmento ${scanProgress.current}/${scanProgress.total}...`
-                                : '⏳ Extraindo texto...')
-                            : '📄 Escanear PDF'}
+            
+            <div className="analysis-box" style={{ 
+                flex: expandedBlock === 'analysis' ? '1 1 100%' : '1 1 65%', 
+                height: 'auto',
+                position: expandedBlock === 'analysis' ? 'absolute' : 'relative',
+                top: expandedBlock === 'analysis' ? 0 : 'auto',
+                left: expandedBlock === 'analysis' ? 0 : 'auto',
+                right: expandedBlock === 'analysis' ? 0 : 'auto',
+                bottom: expandedBlock === 'analysis' ? 0 : 'auto',
+                zIndex: expandedBlock === 'analysis' ? 10 : 1,
+                opacity: expandedBlock === 'reading' ? 0.3 : 1
+            }}>
+                <div className="analysis-tabs" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex' }}>
+                        <div className={`analysis-tab ${activeTab === 'Capítulo' ? 'active' : ''}`} onClick={() => setActiveTab('Capítulo')}>Capítulo</div>
+                        <div className={`analysis-tab ${activeTab === 'Versículo' ? 'active' : ''}`} onClick={() => setActiveTab('Versículo')}>Versículo</div>
+                        <div className={`analysis-tab ${activeTab === 'Comentários' ? 'active' : ''}`} onClick={() => setActiveTab('Comentários')}>Comentários</div>
                     </div>
-                    <input
-                        type="file"
-                        accept=".pdf"
-                        style={{ display: 'none' }}
-                        disabled={scanLoading}
-                        onChange={handleScanPdf}
-                    />
-                </label>
-            </div>
-
-            {/* Escanear author config */}
-            <div style={{ ...panelStyle, backgroundColor: '#faf3ff', border: '1px solid #ce93d8' }}>
-                <label style={sectionLabel}>Autor Padrão para Escanear PDF</label>
-                <input
-                    type="text"
-                    value={scanAuthor}
-                    onChange={e => setScanAuthor(e.target.value)}
-                    placeholder="Ex: Matthew Henry, Spurgeon, Moody..."
-                    style={{ width: '100%', marginBottom: '4px' }}
-                />
-                <p style={{ fontSize: '0.78rem', color: '#7b1fa2', margin: 0 }}>
-                    ✅ Processa PDFs de <strong>qualquer tamanho</strong> — o documento é dividido automaticamente em segmentos de ~4.000 palavras, cada um enviado ao Ollama em sequência. A tabela é preenchida incrementalmente conforme o processamento avança.
-                </p>
-            </div>
-
-            {/* Barra de progresso dos segmentos */}
-            {scanLoading && scanProgress.total > 0 && (
-                <div style={{ marginBottom: '1rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: '#6a1b9a', marginBottom: '5px', fontWeight: 'bold' }}>
-                        <span>🔍 Processando segmento {scanProgress.current} de {scanProgress.total}</span>
-                        <span>{Math.round((scanProgress.current / scanProgress.total) * 100)}%</span>
-                    </div>
-                    <div style={{ height: '10px', backgroundColor: '#ede7f6', borderRadius: '99px', overflow: 'hidden' }}>
-                        <div style={{
-                            height: '100%',
-                            width: `${(scanProgress.current / scanProgress.total) * 100}%`,
-                            backgroundColor: '#8e24aa',
-                            borderRadius: '99px',
-                            transition: 'width 0.4s ease'
-                        }} />
-                    </div>
-                    {parsedCommentaries.length > 0 && (
-                        <p style={{ fontSize: '0.78rem', color: '#555', marginTop: '5px' }}>
-                            {parsedCommentaries.length} comentário(s) extraídos até agora...
-                        </p>
-                    )}
-                </div>
-            )}
-            {scanLoading && scanProgress.total === 0 && <LoadingSpinner />}
-            {!scanLoading && <>{scanError && <ErrorMessage message={scanError} />}</>}
-
-            {/* ===== TABELA DE PRÉ-VISUALIZAÇÃO ===== */}
-            {parsedCommentaries.length > 0 && (
-                <div style={panelStyle}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '8px' }}>
-                        <div>
-                            <h3 style={{ margin: 0, color: '#4a148c' }}>Tabela de Comentários Escaneados</h3>
-                            <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: 'var(--text-light)' }}>
-                                {parsedCommentaries.length} item(ns) extraídos{scanLoading ? ' (em processamento...)' : '. Edite ou exclua antes de salvar.'}.
-                            </p>
-                        </div>
-                        <button
-                            onClick={handleAdicionarTabela}
-                            disabled={saving}
-                            style={{ padding: '10px 22px', backgroundColor: '#2e7d32', color: 'white', borderRadius: '8px', fontWeight: 'bold', border: 'none', cursor: 'pointer', fontSize: '0.95rem' }}
+                    <div style={{ paddingRight: '10px', display: 'flex', alignItems: 'center' }}>
+                        <button 
+                            onClick={() => setExpandedBlock(expandedBlock === 'analysis' ? null : 'analysis')} 
+                            style={{ 
+                                width: '32px', height: '32px', fontSize: '1.2rem', 
+                                backgroundColor: 'transparent', color: '#616161', border: 'none', 
+                                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' 
+                            }} 
+                            title={expandedBlock === 'analysis' ? "Restaurar" : "Expandir"}
                         >
-                            {saving ? 'Gravando...' : '✅ Adicionar Tabela no Supabase'}
+                            {expandedBlock === 'analysis' ? '–' : '☐'}
                         </button>
                     </div>
+                </div>
+                <div className="analysis-content" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                    {activeTab === 'Capítulo' && (
+                        externalRefChapter ? <div className="embedded-view"><CapituloView externalRef={externalRefChapter} /></div> : <div style={{ color: '#666', textAlign: 'center' }}>Selecione o capítulo.</div>
+                    )}
+                    {activeTab === 'Versículo' && (
+                        selectedVerse ? (
+                            <div className="embedded-view">
+                                <VersiculoView externalRef={externalRefVerse} />
+                            </div>
+                        ) : <div style={{ color: '#666', textAlign: 'center', padding: '2rem' }}>Selecione o versículo no painel esquerdo.</div>
+                    )}
+                    {activeTab === 'Comentários' && (
+                        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '1rem' }}>
+                            {loadingComentarios ? <LoadingSpinner /> : (
+                                <>
+                                    {comentarios.length === 0 ? (
+                                        <div style={{ color: '#666', textAlign: 'center' }}>Nenhum comentário encontrado no banco de dados.</div>
+                                    ) : (
+                                        <>
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', backgroundColor: '#f0f6ff', padding: '10px', borderRadius: '8px', border: '1px solid #d0e2f7' }}>
+                                                <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontWeight: 'bold', color: '#0d47a1' }}>
+                                                    <input type="checkbox" checked={!!selectedCommentaries['Todos']} onChange={() => handleCommentaryCheck('Todos')} />
+                                                    Todos
+                                                </label>
+                                                {authors.map(author => (
+                                                    <label key={author} style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', color: '#333' }}>
+                                                        <input type="checkbox" checked={!!selectedCommentaries[author]} onChange={() => handleCommentaryCheck(author)} />
+                                                        {author}
+                                                    </label>
+                                                ))}
+                                            </div>
+                                            <div style={{ overflowY: 'auto', flexGrow: 1, paddingRight: '5px' }}>
+                                                {activeCommentaries.map(c => (
+                                                    <div key={c.id || Math.random()} style={{ marginBottom: '1rem', padding: '15px', backgroundColor: '#fff', border: '1px solid #e0e0e0', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', borderBottom: '1px solid #eee', paddingBottom: '8px' }}>
+                                                            <span style={{ fontSize: '1.2rem' }}>👤</span>
+                                                            <strong style={{ color: '#0d47a1', fontSize: '1.05rem' }}>{c.author}</strong>
+                                                            {c.verse && <span style={{ backgroundColor: '#e3f2fd', color: '#1565c0', padding: '2px 6px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold' }}>v. {c.verse}</span>}
+                                                        </div>
+                                                        <div style={{ color: '#424242', lineHeight: '1.6' }}>
+                                                            {c.text.split(/\r?\n/).map((p, i) => (
+                                                                <p key={i} style={{ marginBottom: '8px' }}>{parseBold(p)}</p>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </div>
 
-                    {saveError && <ErrorMessage message={saveError} />}
-                    {saveSuccess && <div style={{ color: '#2e7d32', backgroundColor: '#e8f5e9', padding: '10px 15px', borderRadius: '6px', marginBottom: '1rem', fontWeight: 'bold' }}>{saveSuccess}</div>}
-
-                    <div style={{ overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
-                            <thead>
-                                <tr style={{ backgroundColor: '#ede7f6', borderBottom: '2px solid #b39ddb' }}>
-                                    <th style={{ padding: '10px 12px' }}>Autor</th>
-                                    <th style={{ padding: '10px 12px' }}>Livro</th>
-                                    <th style={{ padding: '10px 12px' }}>Cap.</th>
-                                    <th style={{ padding: '10px 12px' }}>Vers.</th>
-                                    <th style={{ padding: '10px 12px', width: '50%' }}>Comentário</th>
-                                    <th style={{ padding: '10px 12px', textAlign: 'center' }}>Ação</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {parsedCommentaries.map((item) => (
-                                    <tr key={item.id} style={{ borderBottom: '1px solid #ede7f6' }}>
-                                        <td style={{ padding: '8px 12px' }}>
-                                            <input type="text" value={item.author || ''} onChange={e => handleEditRow(item.id, 'author', e.target.value)} style={{ width: '100px', padding: '3px 5px', fontSize: '0.82rem' }} />
-                                        </td>
-                                        <td style={{ padding: '8px 12px' }}>
-                                            <input type="text" value={item.book || ''} onChange={e => handleEditRow(item.id, 'book', e.target.value)} style={{ width: '100px', padding: '3px 5px', fontSize: '0.82rem' }} />
-                                        </td>
-                                        <td style={{ padding: '8px 12px' }}>
-                                            <input type="number" value={item.chapter || ''} onChange={e => handleEditRow(item.id, 'chapter', parseInt(e.target.value, 10))} style={{ width: '48px', padding: '3px 5px', fontSize: '0.82rem' }} />
-                                        </td>
-                                        <td style={{ padding: '8px 12px' }}>
-                                            <input type="text" value={item.verse === null || item.verse === undefined ? '' : item.verse} onChange={e => handleEditRow(item.id, 'verse', e.target.value === '' ? null : parseInt(e.target.value, 10))} placeholder="—" style={{ width: '44px', padding: '3px 5px', fontSize: '0.82rem' }} />
-                                        </td>
-                                        <td style={{ padding: '8px 12px' }}>
-                                            <textarea value={item.text || ''} onChange={e => handleEditRow(item.id, 'text', e.target.value)} style={{ width: '100%', minHeight: '56px', padding: '3px 5px', fontSize: '0.82rem', resize: 'vertical' }} />
-                                        </td>
-                                        <td style={{ padding: '8px 12px', textAlign: 'center' }}>
-                                            <button onClick={() => handleDeleteRow(item.id)} style={{ backgroundColor: '#d32f2f', color: 'white', padding: '3px 8px', fontSize: '0.78rem', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
-                                                Excluir
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+            {/* Modal de Análise Profunda NAA */}
+            {deepAnalysisModalOpen && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+                    backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', 
+                    justifyContent: 'center', alignItems: 'center', zIndex: 1200, padding: '20px'
+                }}>
+                    <div style={{
+                        backgroundColor: '#ffffff', borderRadius: '12px',
+                        padding: '24px', boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)', position: 'relative',
+                        maxWidth: '600px', width: '100%', maxHeight: '90vh', display: 'flex', flexDirection: 'column'
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', borderBottom: '2px solid #e3f2fd', paddingBottom: '10px' }}>
+                            <h3 style={{ margin: 0, color: '#1565C0', fontSize: '1.3rem' }}>Análise Profunda: "{currentDeepAnalysis?.word}"</h3>
+                            <button onClick={() => setDeepAnalysisModalOpen(false)} style={{ background: 'transparent', color: '#666', border: 'none', fontSize: '1.5rem', cursor: 'pointer', padding: 0 }}>✕</button>
+                        </div>
+                        <div style={{ overflowY: 'auto', flexGrow: 1, paddingRight: '10px' }}>
+                            {currentDeepAnalysis?.loading && <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}><LoadingSpinner /></div>}
+                            {currentDeepAnalysis?.error && <ErrorMessage message={currentDeepAnalysis.error} />}
+                            {currentDeepAnalysis?.result && (
+                                <div>
+                                    <p style={{ margin: '0 0 15px 0', fontSize: '1.1rem', color: '#424242', backgroundColor: '#f5f5f5', padding: '10px', borderRadius: '6px' }}>
+                                        <strong>{currentDeepAnalysis.result.palavraOriginal}</strong> ; {currentDeepAnalysis.result.transliteracao} - <em>{currentDeepAnalysis.result.palavraNoVersiculo}</em>
+                                    </p>
+                                    {currentDeepAnalysis.result.passos && currentDeepAnalysis.result.passos.map((passo, pIndex) => (
+                                        <div key={pIndex} style={{ marginBottom: '15px' }}>
+                                            <strong style={{ display: 'block', color: '#1565C0', marginBottom: '4px' }}>{passo.titulo}</strong>
+                                            <p style={{ margin: 0, color: '#424242', lineHeight: '1.6' }}>{parseBold(passo.conteudo)}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}
 
-            {/* ===== MODAL ANEXAR ===== */}
-            {showAnexarModal && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-                    <div style={{ backgroundColor: 'white', borderRadius: '12px', padding: '2rem', width: '100%', maxWidth: '560px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                            <h3 style={{ margin: 0, color: '#1a237e' }}>📎 Anexar Comentário Manual</h3>
-                            <button onClick={() => setShowAnexarModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#555' }}>✕</button>
-                        </div>
-
-                        {formError && <ErrorMessage message={formError} />}
-                        {formSuccess && <div style={{ color: '#2e7d32', backgroundColor: '#e8f5e9', padding: '10px', borderRadius: '6px', marginBottom: '1rem', fontWeight: 'bold' }}>{formSuccess}</div>}
-
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                            <div>
-                                <label style={sectionLabel}>Autor *</label>
-                                <input type="text" value={formAuthor} onChange={e => setFormAuthor(e.target.value)} placeholder="Ex: Spurgeon" style={{ width: '100%' }} />
+            {/* Modal Interlinear BHS */}
+            {selectedBhsWord && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+                    backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', 
+                    justifyContent: 'center', alignItems: 'center', zIndex: 1100, padding: '20px'
+                }}>
+                    <div style={{
+                        backgroundColor: '#ffffff', border: '2px solid #2b569a', borderRadius: '12px',
+                        padding: '24px', boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)', position: 'relative',
+                        maxWidth: '400px', width: '100%', maxHeight: '90vh', overflowY: 'auto',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', textAlign: 'center'
+                    }}>
+                        <button
+                            onClick={() => setSelectedBhsWord(null)}
+                            style={{ position: 'absolute', top: '10px', right: '15px', background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#757575', padding: '4px' }}
+                        >✕</button>
+                        <div style={{ fontFamily: "'SBL BibLit', 'SBL Hebrew', 'Times New Roman', serif", fontSize: '3rem', color: '#0d47a1', marginBottom: '8px', lineHeight: '1.2' }} dangerouslySetInnerHTML={{ __html: selectedBhsWord.word }} />
+                        
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', backgroundColor: '#f5f5f5', padding: '16px', borderRadius: '8px', border: '1px solid #e0e0e0' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #ddd', paddingBottom: '4px' }}>
+                                <span style={{ color: '#616161', fontWeight: 'bold' }}>Transliteração:</span>
+                                <span style={{ color: '#212121', fontStyle: 'italic' }}>{selectedBhsWord.translit}</span>
                             </div>
-                            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-                                <div style={{ flexGrow: 1, minWidth: '150px' }}>
-                                    <label style={sectionLabel}>Livro *</label>
-                                    <select
-                                        value={formBook}
-                                        onChange={e => { setFormBook(e.target.value); setFormChapter(1); }}
-                                        style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '0.9rem' }}
-                                    >
-                                        {Object.entries(NAA_BOOKS).map(([testament, books]) => (
-                                            <optgroup key={testament} label={testament}>
-                                                {books.map(b => <option key={b.name} value={b.name}>{b.name}</option>)}
-                                            </optgroup>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div style={{ minWidth: '100px' }}>
-                                    <label style={sectionLabel}>Capítulo *</label>
-                                    <select
-                                        value={formChapter}
-                                        onChange={e => setFormChapter(parseInt(e.target.value, 10))}
-                                        style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid var(--border-color)', fontSize: '0.9rem' }}
-                                    >
-                                        {Array.from({ length: formBookChapters }, (_, i) => i + 1).map(n => (
-                                            <option key={n} value={n}>{n}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div style={{ minWidth: '100px' }}>
-                                    <label style={sectionLabel}>Versículo</label>
-                                    <input type="number" value={formVerse} onChange={e => setFormVerse(e.target.value)} placeholder="(deixe vazio = cap. todo)" style={{ width: '100%' }} min={1} />
-                                </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #ddd', paddingBottom: '4px' }}>
+                                <span style={{ color: '#616161', fontWeight: 'bold' }}>Significado:</span>
+                                <span style={{ color: '#212121', fontWeight: 600 }}>{selectedBhsWord.gloss}</span>
                             </div>
-                            <div>
-                                <label style={sectionLabel}>Texto do Comentário *</label>
-                                <textarea value={formText} onChange={e => setFormText(e.target.value)} placeholder="Escreva ou cole o comentário bíblico aqui..." style={{ width: '100%', minHeight: '130px', resize: 'vertical' }} />
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ color: '#616161', fontWeight: 'bold' }}>Strong:</span>
+                                <a href={`https://biblehub.com/hebrew/${selectedBhsWord.strong.replace(/[^0-9]/g, '')}.htm`} target="_blank" rel="noopener noreferrer" style={{ color: '#1976d2', textDecoration: 'underline' }}>{selectedBhsWord.strong}</a>
                             </div>
-                        </div>
-
-                        <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
-                            <button onClick={() => setShowAnexarModal(false)} style={{ flex: 1, padding: '12px', backgroundColor: '#e0e0e0', color: '#333', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>
-                                Cancelar
-                            </button>
-                            <button onClick={handleAnexarSave} disabled={formSaving} style={{ flex: 2, padding: '12px', backgroundColor: '#1565c0', color: 'white', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 'bold', fontSize: '1rem' }}>
-                                {formSaving ? 'Salvando...' : '💾 Salvar no Supabase'}
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -3719,167 +3324,160 @@ Responda APENAS em JSON com um array de objetos com as chaves: "author", "book",
     );
 };
 
+const RightSidebar = ({ selectedBook, selectedChapter, selectedVerse }) => {
+    const [activeTab, setActiveTab] = useState('Pensamentos');
+    
+    return (
+        <div className="selection-box" style={{ height: '100%', padding: 0, overflow: 'hidden' }}>
+            <div className="analysis-tabs">
+                <div style={{ flex: 1, textAlign: 'center' }} className={`analysis-tab ${activeTab === 'Pensamentos' ? 'active' : ''}`} onClick={() => setActiveTab('Pensamentos')}>Pensamentos</div>
+                <div style={{ flex: 1, textAlign: 'center' }} className={`analysis-tab ${activeTab === 'Ilustrações' ? 'active' : ''}`} onClick={() => setActiveTab('Ilustrações')}>Ilustrações</div>
+            </div>
+            <div style={{ padding: '0', height: '100%', overflowY: 'auto' }} className="embedded-view">
+                {activeTab === 'Pensamentos' && <PensamentosView />}
+                {activeTab === 'Ilustrações' && <IlustracoesView />}
+            </div>
+        </div>
+    );
+};
 
-// --- Main App Component ---
 const App = () => {
-    const TABS = ['NAA', 'BHS', 'Capítulo', 'Versículo', 'Pensamentos', 'Ilustrações', 'Construção', 'Chat', 'Obras'];
-    const [activeTab, setActiveTab] = useState(TABS[0]);
-    const [resetKey, setResetKey] = useState(0);
+    const [selectedBook, setSelectedBook] = useState(() => {
+        const stored = localStorage.getItem('selectedBook');
+        return stored ? JSON.parse(stored) : { name: "Salmos", map: "Sl", chapters: 150 };
+    });
+    const [selectedChapter, setSelectedChapter] = useState(() => {
+        const stored = localStorage.getItem('selectedChapter');
+        return stored ? JSON.parse(stored) : 23;
+    });
+    const [selectedVerse, setSelectedVerse] = useState(() => {
+        const stored = localStorage.getItem('selectedVerse');
+        return stored ? JSON.parse(stored) : 1;
+    });
 
-    const [provider, setProvider] = useState(() => localStorage.getItem('ai_provider') || 'ollama');
+    useEffect(() => {
+        if (selectedBook) localStorage.setItem('selectedBook', JSON.stringify(selectedBook));
+        if (selectedChapter) localStorage.setItem('selectedChapter', JSON.stringify(selectedChapter));
+        if (selectedVerse) localStorage.setItem('selectedVerse', JSON.stringify(selectedVerse));
+    }, [selectedBook, selectedChapter, selectedVerse]);
+
+    const [provider, setProvider] = useState(() => localStorage.getItem('ai_provider') || 'gemini');
     const [ollamaModel, setOllamaModel] = useState(() => localStorage.getItem('ollama_model') || 'qwen2.5:14b');
     const [ollamaUrl, setOllamaUrl] = useState(() => localStorage.getItem('ollama_url') || 'http://localhost:11434');
     const [showSettings, setShowSettings] = useState(false);
 
-    const handleProviderChange = (val: string) => {
+    const handleProviderChange = (val) => {
+        if (val === 'ollama') {
+            if (!window.confirm('Você selecionou Ollama. Certifique-se de que ele está rodando localmente. Deseja continuar?')) {
+                return;
+            }
+        }
         setProvider(val);
         localStorage.setItem('ai_provider', val);
     };
 
-    const handleModelChange = (val: string) => {
+    const handleModelChange = (val) => {
         setOllamaModel(val);
         localStorage.setItem('ollama_model', val);
     };
 
-    const handleUrlChange = (val: string) => {
+    const handleUrlChange = (val) => {
         setOllamaUrl(val);
         localStorage.setItem('ollama_url', val);
     };
 
-    useEffect(() => {
-        const handleAnalyze = () => setActiveTab('Versículo');
-        const handleThoughts = () => setActiveTab('Pensamentos');
-        const handleIllustrations = () => setActiveTab('Ilustrações');
-        const handleResetAll = () => setResetKey(prev => prev + 1);
-        const handleChangeTab = (e: any) => {
-            if (e.detail) setActiveTab(e.detail);
-        };
-
-        window.addEventListener('analyze-verse', handleAnalyze);
-        window.addEventListener('search-thoughts', handleThoughts);
-        window.addEventListener('search-illustrations', handleIllustrations);
-        window.addEventListener('reset-all', handleResetAll);
-        window.addEventListener('change-tab', handleChangeTab);
-
-        return () => {
-            window.removeEventListener('analyze-verse', handleAnalyze);
-            window.removeEventListener('search-thoughts', handleThoughts);
-            window.removeEventListener('search-illustrations', handleIllustrations);
-            window.removeEventListener('reset-all', handleResetAll);
-            window.removeEventListener('change-tab', handleChangeTab);
-        };
-    }, []);
-
-    // Sync provider/model to global generateAIContent context via localStorage
     useEffect(() => { localStorage.setItem('ai_provider', provider); }, [provider]);
     useEffect(() => { localStorage.setItem('ollama_model', ollamaModel); }, [ollamaModel]);
     useEffect(() => { localStorage.setItem('ollama_url', ollamaUrl); }, [ollamaUrl]);
 
     return (
         <div className="app-container">
-            <header style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '5px' }}>
-                <h1 style={{ margin: 0, fontSize: '1.8rem', fontWeight: 'bold', letterSpacing: '0.5px' }}>TEXTOS REAVIVADOS</h1>
-                <button
-                    onClick={() => setShowSettings(!showSettings)}
-                    style={{
-                        marginTop: '5px',
-                        backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                        border: 'none',
-                        color: 'white',
-                        padding: '6px 12px',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '0.85rem',
-                        fontWeight: 'bold',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        transition: 'background-color 0.2s'
-                    }}
-                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.3)'}
-                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.2)'}
-                >
-                    ⚙️ Provedor: {provider === 'gemini' ? 'Gemini (Nuvem)' : provider === 'supabase' ? 'Supabase (Sem IA)' : `Ollama (${ollamaModel})`}
-                </button>
+            
+            <header>
+                <div>
+                    <h1>Redator Bíblia</h1>
+                </div>
+                <div>
+                    <h2 style={{ fontSize: '1.2rem', fontWeight: 'bold', margin: 0 }}>
+                        {selectedBook ? `${selectedBook.name} ${selectedChapter || ''}${selectedVerse ? ':'+selectedVerse : ''}` : ''}
+                    </h2>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <button
+                        onClick={() => setShowSettings(!showSettings)}
+                        style={{
+                            backgroundColor: '#f5f5f5',
+                            border: '1px solid #e0e0e0',
+                            color: '#333',
+                            padding: '6px 12px',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '0.85rem',
+                            fontWeight: 'bold',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            transition: 'background-color 0.2s'
+                        }}
+                    >
+                        ⚙️ Provedor: {provider === 'gemini' ? 'Gemini (Nuvem)' : provider === 'supabase' ? 'Supabase (Sem IA)' : `Ollama (${ollamaModel})`}
+                    </button>
+                </div>
             </header>
 
+
             {showSettings && (
-                <div style={{
-                    backgroundColor: '#e3f2fd',
-                    borderBottom: '1px solid #bbdefb',
-                    padding: '1.25rem',
-                    display: 'flex',
-                    flexWrap: 'wrap',
-                    gap: '1.25rem',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                }}>
+                <div style={{ backgroundColor: '#e3f2fd', borderBottom: '1px solid #bbdefb', padding: '1.25rem', display: 'flex', flexWrap: 'wrap', gap: '1.25rem', alignItems: 'center', justifyContent: 'center' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', minWidth: '160px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <label style={{ fontWeight: 'bold', fontSize: '0.8rem', color: '#0d47a1' }}>PROVEDOR DE IA:</label>
-                            {provider === 'ollama' && (
-                                <OllamaStartButton />
-                            )}
+                            {provider === 'ollama' && <OllamaStartButton />}
                         </div>
-                        <select
-                            value={provider}
-                            onChange={(e) => handleProviderChange(e.target.value)}
-                            style={{ padding: '8px', borderRadius: '4px', border: '1px solid #90caf9', fontSize: '0.9rem', backgroundColor: 'white', cursor: 'pointer' }}
-                        >
+                        <select value={provider} onChange={(e) => handleProviderChange(e.target.value)} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #90caf9', fontSize: '0.9rem', backgroundColor: 'white', cursor: 'pointer' }}>
                             <option value="gemini">Gemini (Nuvem)</option>
                             <option value="ollama">Ollama (Local)</option>
                             <option value="supabase">Supabase (Sem IA)</option>
                         </select>
                     </div>
-
                     {provider === 'ollama' && (
                         <>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', flexGrow: 1, minWidth: '180px' }}>
                                 <label style={{ fontWeight: 'bold', fontSize: '0.8rem', color: '#0d47a1' }}>MODELO LOCAL (OLLAMA):</label>
-                                <input
-                                    type="text"
-                                    value={ollamaModel}
-                                    onChange={(e) => handleModelChange(e.target.value)}
-                                    placeholder="Ex: qwen2.5:14b ou llama3.1:8b"
-                                    style={{ padding: '8px', borderRadius: '4px', border: '1px solid #90caf9', fontSize: '0.9rem', backgroundColor: 'white' }}
-                                />
+                                <input type="text" value={ollamaModel} onChange={(e) => handleModelChange(e.target.value)} placeholder="Ex: qwen2.5:14b" style={{ padding: '8px', borderRadius: '4px', border: '1px solid #90caf9', fontSize: '0.9rem', backgroundColor: 'white' }} />
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', flexGrow: 1, minWidth: '180px' }}>
                                 <label style={{ fontWeight: 'bold', fontSize: '0.8rem', color: '#0d47a1' }}>ENDEREÇO DO SERVER:</label>
-                                <input
-                                    type="text"
-                                    value={ollamaUrl}
-                                    onChange={(e) => handleUrlChange(e.target.value)}
-                                    placeholder="Ex: http://localhost:11434"
-                                    style={{ padding: '8px', borderRadius: '4px', border: '1px solid #90caf9', fontSize: '0.9rem', backgroundColor: 'white' }}
-                                />
+                                <input type="text" value={ollamaUrl} onChange={(e) => handleUrlChange(e.target.value)} placeholder="Ex: http://localhost:11434" style={{ padding: '8px', borderRadius: '4px', border: '1px solid #90caf9', fontSize: '0.9rem', backgroundColor: 'white' }} />
                             </div>
                         </>
                     )}
                 </div>
             )}
 
-            <nav className="tab-nav">
-                {TABS.map(tab => (
-                    <button
-                        key={tab}
-                        className={`tab-button ${activeTab === tab ? 'active' : ''}`}
-                        onClick={() => setActiveTab(tab)}
-                    >
-                        {tab}
-                    </button>
-                ))}
-            </nav>
             <main>
-                <div style={{ display: activeTab === 'NAA' ? 'block' : 'none' }}><BibliaView key={`biblia-${resetKey}`} /></div>
-                <div style={{ display: activeTab === 'BHS' ? 'block' : 'none' }}><BhsView key={`bhs-${resetKey}`} /></div>
-                <div style={{ display: activeTab === 'Capítulo' ? 'block' : 'none' }}><CapituloView /></div>
-                <div style={{ display: activeTab === 'Versículo' ? 'block' : 'none' }}><VersiculoView key={`versiculo-${resetKey}`} /></div>
-                <div style={{ display: activeTab === 'Pensamentos' ? 'block' : 'none' }}><PensamentosView key={`pensamentos-${resetKey}`} /></div>
-                <div style={{ display: activeTab === 'Ilustrações' ? 'block' : 'none' }}><IlustracoesView key={`ilustracoes-${resetKey}`} /></div>
-                <div style={{ display: activeTab === 'Construção' ? 'block' : 'none' }}><ConstrucaoView key={`construcao-${resetKey}`} /></div>
-                <div style={{ display: activeTab === 'Chat' ? 'block' : 'none' }}><ChatView key={`chat-${resetKey}`} /></div>
-                <div style={{ display: activeTab === 'Obras' ? 'block' : 'none' }}><ImportarView key={`importar-${resetKey}`} /></div>
+                <div className="sidebar-left">
+                    <LeftSidebar 
+                        selectedBook={selectedBook} setSelectedBook={setSelectedBook}
+                        selectedChapter={selectedChapter} setSelectedChapter={setSelectedChapter}
+                        selectedVerse={selectedVerse} setSelectedVerse={setSelectedVerse}
+                    />
+                </div>
+                
+                <div className="center-content">
+                    <CenterContent 
+                        selectedBook={selectedBook}
+                        selectedChapter={selectedChapter}
+                        selectedVerse={selectedVerse}
+                    />
+                </div>
+                
+                <div className="sidebar-right">
+                    <RightSidebar 
+                        selectedBook={selectedBook}
+                        selectedChapter={selectedChapter}
+                        selectedVerse={selectedVerse}
+                    />
+                </div>
             </main>
         </div>
     );
