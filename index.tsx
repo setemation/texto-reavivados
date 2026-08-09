@@ -3252,9 +3252,9 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
                                         <div style={{ color: '#666', textAlign: 'center' }}>Nenhum comentário encontrado no banco de dados.</div>
                                     ) : (
                                         <>
-                                            <div style={{ display: 'flex', width: '100%', gap: '10px' }}>
+                                            <div style={{ display: 'flex', width: '100%', gap: '10px', alignItems: 'stretch' }}>
                                                 {/* Box de Referência (30%) */}
-                                                <div style={{ flex: '0 0 30%', backgroundColor: '#fff', border: '1px solid #ccc', borderRadius: '8px', padding: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: '#333', fontSize: '1rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                <div style={{ flex: '0 0 30%', backgroundColor: '#fff', border: '1px solid #ccc', borderRadius: '4px', padding: '0.5rem 0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'flex-start', fontWeight: 'normal', color: 'inherit', fontSize: '0.9rem', boxSizing: 'border-box', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                     {selectedBook?.name} {selectedChapter}{selectedVerse ? `:${selectedVerse}` : ''}
                                                 </div>
                                                 
@@ -3262,7 +3262,7 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
                                                 <div style={{ flex: '1', position: 'relative' }}>
                                                     <button 
                                                         onClick={() => setIsRefsMenuOpen(!isRefsMenuOpen)}
-                                                        style={{ width: '100%', backgroundColor: '#f0f6ff', border: '1px solid #d0e2f7', borderRadius: '8px', padding: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', fontWeight: 'bold', color: '#0d47a1', fontSize: '1rem' }}
+                                                        style={{ width: '100%', height: '100%', backgroundColor: '#f0f6ff', border: '1px solid #d0e2f7', borderRadius: '4px', padding: '0.5rem 0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', fontWeight: 'bold', color: '#0d47a1', fontSize: '0.9rem', boxSizing: 'border-box' }}
                                                     >
                                                         Referências <span>{isRefsMenuOpen ? '▲' : '▼'}</span>
                                                     </button>
