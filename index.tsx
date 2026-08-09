@@ -2832,7 +2832,7 @@ const LeftSidebar = ({ selectedBook, setSelectedBook, selectedChapter, setSelect
             </div>
             <div className="selection-box">
                 <h3>VERSÍCULO</h3>
-                <div className="number-grid">
+                <div className="number-grid" style={{ maxHeight: '210px' }}>
                     {selectedChapter && selectedBook && selectedBook.verses ? Array.from({ length: selectedBook.verses[selectedChapter - 1] }, (_, i) => i + 1).map(num => (
                         <div 
                             key={num}
