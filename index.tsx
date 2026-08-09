@@ -3313,12 +3313,12 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
                                         <div style={{ color: '#666', textAlign: 'center', padding: '2rem' }}>Texto Original não encontrado para este capítulo.</div>
                                     ) : (
                                         <div className="original-version-container">
-                                            {originalVerses.map(v => {
+                                            {(selectedVerse ? originalVerses.filter(v => String(v.verse) === String(selectedVerse)) : originalVerses).map(v => {
                                                 let words = [];
                                                 try { words = JSON.parse(v.text); } catch(e) {}
                                                 return (
                                                     <div key={v.verse} className="original-verse-block">
-                                                        <h4 className="original-verse-num">Versículo {v.verse}</h4>
+                                                        <h4 className="original-verse-num">{selectedBook?.name} {selectedChapter}:{v.verse}</h4>
                                                         <div className="original-table-wrapper">
                                                             <table className="original-interlinear-table">
                                                                 <thead>
