@@ -2861,6 +2861,10 @@ const CenterContent = ({ selectedBook, selectedChapter, selectedVerse }) => {
     const [loadingComentarios, setLoadingComentarios] = useState(false);
     const [selectedCommentaries, setSelectedCommentaries] = useState({ 'Todos': true });
 
+    // Original Interlinear State
+    const [originalVerses, setOriginalVerses] = useState([]);
+    const [loadingOriginal, setLoadingOriginal] = useState(false);
+
     // Deep Analysis State for NAA
     const [selectedVerseWordIndex, setSelectedVerseWordIndex] = useState(null); // format: "verseNum-wordIndex"
     const [verseWordDeepAnalysis, setVerseWordDeepAnalysis] = useState({});
@@ -2968,6 +2972,36 @@ const CenterContent = ({ selectedBook, selectedChapter, selectedVerse }) => {
             fetchComments();
         }
     }, [activeTab, externalRefChapter, externalRefVerse]);
+
+    // Handle Original Tab activation
+    useEffect(() => {
+        if (activeTab === 'Original' && externalRefChapter) {
+            const fetchOriginal = async () => {
+                setLoadingOriginal(true);
+                try {
+                    const bookName = selectedBook.name;
+                    const match = externalRefChapter.match(/^(.+?)\s+(\d+)/);
+                    if (match && match[2]) {
+                        const ch = match[2];
+                        const { data, error } = await supabase
+                            .from('verses')
+                            .select('*')
+                            .eq('book', `Original_${bookName}`)
+                            .eq('chapter', ch)
+                            .order('verse', { ascending: true });
+                        if (data) {
+                            setOriginalVerses(data);
+                        }
+                    }
+                } catch (e) {
+                    console.error('Erro ao buscar versão Original', e);
+                } finally {
+                    setLoadingOriginal(false);
+                }
+            };
+            fetchOriginal();
+        }
+    }, [activeTab, externalRefChapter, selectedBook]);
 
     const handleCommentaryCheck = (author) => {
         if (author === 'Todos') {
@@ -3176,6 +3210,7 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
                         <div className={`analysis-tab ${activeTab === 'Capítulo' ? 'active' : ''}`} onClick={() => setActiveTab('Capítulo')}>Capítulo</div>
                         <div className={`analysis-tab ${activeTab === 'Versículo' ? 'active' : ''}`} onClick={() => setActiveTab('Versículo')}>Versículo</div>
                         <div className={`analysis-tab ${activeTab === 'Comentários' ? 'active' : ''}`} onClick={() => setActiveTab('Comentários')}>Comentários</div>
+                        <div className={`analysis-tab ${activeTab === 'Original' ? 'active' : ''}`} onClick={() => setActiveTab('Original')}>Original</div>
                     </div>
                     <div style={{ paddingRight: '10px', display: 'flex', alignItems: 'center' }}>
                         <button 
@@ -3239,6 +3274,54 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
                                                 ))}
                                             </div>
                                         </>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    )}
+                    {activeTab === 'Original' && (
+                        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '1rem', overflowY: 'auto', paddingRight: '5px' }}>
+                            {loadingOriginal ? <LoadingSpinner /> : (
+                                <>
+                                    {originalVerses.length === 0 ? (
+                                        <div style={{ color: '#666', textAlign: 'center', padding: '2rem' }}>Texto Original não encontrado para este capítulo.</div>
+                                    ) : (
+                                        <div className="original-version-container">
+                                            {originalVerses.map(v => {
+                                                let words = [];
+                                                try { words = JSON.parse(v.text); } catch(e) {}
+                                                return (
+                                                    <div key={v.verse} className="original-verse-block">
+                                                        <h4 className="original-verse-num">Versículo {v.verse}</h4>
+                                                        <div className="original-table-wrapper">
+                                                            <table className="original-interlinear-table">
+                                                                <thead>
+                                                                    <tr>
+                                                                        <th>Strong's</th>
+                                                                        <th>Original</th>
+                                                                        <th>Inglês</th>
+                                                                        <th>Morfologia</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    {words.map((w, idx) => (
+                                                                        <tr key={idx}>
+                                                                            <td className="strongs-col">{w.strongs}</td>
+                                                                            <td className="original-col">
+                                                                                <div className="orig-text">{w.original}</div>
+                                                                                <div className="translit-text">{w.translit}</div>
+                                                                            </td>
+                                                                            <td className="english-col">{w.english}</td>
+                                                                            <td className="morph-col">{w.morphology}</td>
+                                                                         </tr>
+                                                                    ))}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
                                     )}
                                 </>
                             )}

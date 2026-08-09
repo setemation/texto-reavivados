@@ -383,3 +383,19 @@ button:disabled {
 heb, .hebrew-text {
   font-family: 'SBL BibLit', 'SBL Hebrew', 'Times New Roman', serif;
 }
+
+/* Original Version Interlinear Table Styles */
+.original-version-container { display: flex; flex-direction: column; gap: 1.5rem; }
+.original-verse-block { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+.original-verse-num { margin: 0 0 10px 0; color: #0d47a1; font-size: 1.1rem; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+.original-table-wrapper { overflow-x: auto; }
+.original-interlinear-table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+.original-interlinear-table th, .original-interlinear-table td { padding: 8px 12px; border: 1px solid #eee; text-align: left; vertical-align: top; }
+.original-interlinear-table th { background-color: #f5f5f5; font-weight: bold; color: #333; }
+.original-interlinear-table tr:nth-child(even) { background-color: #fafafa; }
+.strongs-col { color: #d84315; font-family: monospace; font-size: 0.9rem; width: 10%; }
+.original-col { width: 35%; }
+.orig-text { font-size: 1.3rem; font-family: 'Ezra SIL', 'SBL Hebrew', 'Times New Roman', serif; margin-bottom: 4px; color: #1a237e; }
+.translit-text { font-size: 0.85rem; color: #666; font-style: italic; }
+.english-col { width: 30%; color: #212121; }
+.morph-col { width: 25%; font-size: 0.85rem; color: #00695c; }

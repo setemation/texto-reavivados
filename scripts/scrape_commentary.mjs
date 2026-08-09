@@ -42,7 +42,8 @@ const AUTHOR_MAP = {
     calvin: { name: "Calvin", slug: "calvin" },
     cambridge: { name: "Cambridge", slug: "cambridge" },
     gsb: { name: "Geneva", slug: "gsb" },
-    mhc: { name: "Matthew Henry", slug: "mhc" }
+    mhc: { name: "Matthew Henry", slug: "mhc" },
+    gill: { name: "Gill's Exposition", slug: "gill" }
 };
 
 // --- BOOK MAPPING (BibleHub slug -> Portuguese system name) ---
@@ -356,7 +357,36 @@ function parseChapterHtml(html, authorName, bookName, chapterNum) {
     }
 
     const parts = html.split('<div class="versenum">');
-    // Index 0 is the introduction or heading of the page, ignore it for verse-by-verse
+    
+    // Index 0 is the introduction or heading of the page.
+    if (authorName === "Gill's Exposition" && parts.length > 0) {
+        let introHtml = parts[0];
+        
+        // Strip everything before the title/introduction part starts.
+        // Gill's introduction often begins with <div class="chap">
+        const chapMatch = introHtml.match(/<div class="chap">([\s\S]*)/);
+        if (chapMatch) {
+            let introTextRaw = chapMatch[1].trim();
+            // Try to stop before the footer or navigation links if any
+            const endMatch = introTextRaw.indexOf('<div class="versenum">');
+            if (endMatch !== -1) {
+                introTextRaw = introTextRaw.substring(0, endMatch);
+            }
+            
+            const introClean = cleanHtml(introTextRaw);
+            if (introClean) {
+                commentaries.push({
+                    author: authorName,
+                    book: bookName,
+                    chapter: chapterNum,
+                    verse: 0,
+                    text: introClean
+                });
+            }
+        }
+    }
+
+    // Process verse-by-verse
     for (let i = 1; i < parts.length; i++) {
         const part = parts[i];
         
