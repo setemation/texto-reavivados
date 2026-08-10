@@ -422,12 +422,62 @@ const fetchCommentaries = async (refStr: string): Promise<any[]> => {
     }
 };
 
+const getBookVariants = (rawBook: string): string[] => {
+    const b = rawBook.trim().toLowerCase();
+    const variants = new Set<string>([rawBook.trim()]);
+
+    if (b === 'salmo' || b === 'salmos' || b === 'sl') {
+        variants.add('Salmos');
+        variants.add('Salmo');
+        variants.add('Sl');
+    } else if (b === 'cântico' || b === 'cânticos' || b === 'cantares' || b === 'cântico dos cânticos') {
+        variants.add('Cânticos');
+        variants.add('Cântico');
+        variants.add('Cantares');
+        variants.add('Cântico dos Cânticos');
+    } else if (b === 'oseias' || b === 'oséias') {
+        variants.add('Oséias');
+        variants.add('Oseias');
+    } else if (b === 'miqueias' || b === 'miquéias') {
+        variants.add('Miquéias');
+        variants.add('Miqueias');
+    } else if (b.includes('samuel')) {
+        if (b.includes('1') || b.includes('i')) { variants.add('1 Samuel'); variants.add('1Samuel'); variants.add('I Samuel'); }
+        if (b.includes('2') || b.includes('ii')) { variants.add('2 Samuel'); variants.add('2Samuel'); variants.add('II Samuel'); }
+    } else if (b.includes('reis')) {
+        if (b.includes('1') || b.includes('i')) { variants.add('1 Reis'); variants.add('1Reis'); variants.add('I Reis'); }
+        if (b.includes('2') || b.includes('ii')) { variants.add('2 Reis'); variants.add('2Reis'); variants.add('II Reis'); }
+    } else if (b.includes('crônicas') || b.includes('cronicas')) {
+        if (b.includes('1') || b.includes('i')) { variants.add('1 Crônicas'); variants.add('1Crônicas'); variants.add('I Crônicas'); }
+        if (b.includes('2') || b.includes('ii')) { variants.add('2 Crônicas'); variants.add('2Crônicas'); variants.add('II Crônicas'); }
+    } else if (b.includes('coríntios') || b.includes('corintios')) {
+        if (b.includes('1') || b.includes('i')) { variants.add('1 Coríntios'); variants.add('1Coríntios'); }
+        if (b.includes('2') || b.includes('ii')) { variants.add('2 Coríntios'); variants.add('2Coríntios'); }
+    } else if (b.includes('tessalonicenses')) {
+        if (b.includes('1') || b.includes('i')) { variants.add('1 Tessalonicenses'); variants.add('1Tessalonicenses'); }
+        if (b.includes('2') || b.includes('ii')) { variants.add('2 Tessalonicenses'); variants.add('2Tessalonicenses'); }
+    } else if (b.includes('timóteo') || b.includes('timoteo')) {
+        if (b.includes('1') || b.includes('i')) { variants.add('1 Timóteo'); variants.add('1Timóteo'); }
+        if (b.includes('2') || b.includes('ii')) { variants.add('2 Timóteo'); variants.add('2Timóteo'); }
+    } else if (b.includes('pedro')) {
+        if (b.includes('1') || b.includes('i')) { variants.add('1 Pedro'); variants.add('1Pedro'); }
+        if (b.includes('2') || b.includes('ii')) { variants.add('2 Pedro'); variants.add('2Pedro'); }
+    } else if (b.includes('joão') || b.includes('joao')) {
+        if (b.includes('1') || b.includes('i')) { variants.add('1 João'); variants.add('1João'); }
+        if (b.includes('2') || b.includes('ii')) { variants.add('2 João'); variants.add('2João'); }
+        if (b.includes('3') || b.includes('iii')) { variants.add('3 João'); variants.add('3João'); }
+    }
+
+    return Array.from(variants);
+};
+
 const fetchChapterSummary = async (refStr: string): Promise<string | null> => {
     if (!refStr) return null;
     const match = refStr.trim().match(/^(.+?)\s+(\d+)/);
     if (!match) return null;
-    const book = match[1].trim();
+    const rawBook = match[1].trim();
     const chapter = parseInt(match[2], 10);
+    const bookVariants = getBookVariants(rawBook);
 
     if (isSupabaseConfigured()) {
         try {
@@ -435,8 +485,9 @@ const fetchChapterSummary = async (refStr: string): Promise<string | null> => {
                 .from('commentaries')
                 .select('text')
                 .eq('author', 'Resumo dos Capítulos')
-                .eq('book', book)
+                .in('book', bookVariants)
                 .eq('chapter', chapter)
+                .limit(1)
                 .maybeSingle();
 
             if (!error && data && data.text) {
@@ -452,7 +503,9 @@ const fetchChapterSummary = async (refStr: string): Promise<string | null> => {
         const res = await fetch('/traducoes/comentarios_resumo_dos_capitulos_en.json');
         if (res.ok) {
             const json = await res.json();
-            const found = json.find((item: any) => item.book === book && item.chapter === chapter);
+            const found = json.find((item: any) => 
+                bookVariants.includes(item.book) && item.chapter === chapter
+            );
             if (found && found.text) return found.text;
         }
     } catch (e) {
