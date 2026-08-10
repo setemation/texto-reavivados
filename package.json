@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "tsc --noEmit",
-    "seed:supabase": "node scripts/seed_supabase.mjs"
+    "seed:supabase": "node scripts/seed_supabase.mjs",
+    "tradutor": "node translator/server.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.20.0",

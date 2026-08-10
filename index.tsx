@@ -408,7 +408,8 @@ const fetchCommentaries = async (refStr: string): Promise<any[]> => {
             .from('commentaries')
             .select('author, text, verse')
             .eq('book', book)
-            .eq('chapter', chapter);
+            .eq('chapter', chapter)
+            .neq('author', 'Resumo dos Capítulos');
             
         if (error) {
             console.error('Erro ao buscar comentários do Supabase:', error);
@@ -420,6 +421,47 @@ const fetchCommentaries = async (refStr: string): Promise<any[]> => {
         return [];
     }
 };
+
+const fetchChapterSummary = async (refStr: string): Promise<string | null> => {
+    if (!refStr) return null;
+    const match = refStr.trim().match(/^(.+?)\s+(\d+)/);
+    if (!match) return null;
+    const book = match[1].trim();
+    const chapter = parseInt(match[2], 10);
+
+    if (isSupabaseConfigured()) {
+        try {
+            const { data, error } = await supabase
+                .from('commentaries')
+                .select('text')
+                .eq('author', 'Resumo dos Capítulos')
+                .eq('book', book)
+                .eq('chapter', chapter)
+                .maybeSingle();
+
+            if (!error && data && data.text) {
+                return data.text;
+            }
+        } catch (e) {
+            console.error('Erro ao buscar Resumo dos Capítulos do Supabase:', e);
+        }
+    }
+
+    // Local JSON fallback
+    try {
+        const res = await fetch('/traducoes/comentarios_resumo_dos_capitulos_en.json');
+        if (res.ok) {
+            const json = await res.json();
+            const found = json.find((item: any) => item.book === book && item.chapter === chapter);
+            if (found && found.text) return found.text;
+        }
+    } catch (e) {
+        // Silently fail fallback
+    }
+
+    return null;
+};
+
 
 // --- Tab Content Components ---
 
@@ -1412,20 +1454,102 @@ const getHebrewBookIndex = (bookName: string): number => {
     });
 };
 
+const renderFormattedSummary = (text: string) => {
+    if (!text) return null;
+
+    let cleanedText = text
+        .replace(/^id="leftbox">\s*/gi, '')
+        .replace(/id="leftbox">\s*/gi, '');
+
+    const lines = cleanedText.split('\n');
+    const elements: React.ReactNode[] = [];
+    let keyIdx = 0;
+
+    lines.forEach((line) => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+
+        if (trimmed.startsWith('id="leftbox"') || trimmed.startsWith('id="leftbox">')) return;
+        if (trimmed.match(/^#?\s*.+?\s+\d+\s+Summary$/i)) return;
+        if (trimmed.match(/^Resumo do Capítulo/i)) return;
+
+        if (trimmed.startsWith('# ')) {
+            elements.push(
+                <h2 key={`h1-${keyIdx++}`} style={{ fontSize: '1.4rem', color: '#0d47a1', marginBottom: '0.75rem', marginTop: '1rem', borderBottom: '2px solid #e3f2fd', paddingBottom: '0.4rem' }}>
+                    {trimmed.replace(/^#\s+/, '')}
+                </h2>
+            );
+        } else if (trimmed.startsWith('### ')) {
+            elements.push(
+                <h3 key={`h3-${keyIdx++}`} style={{ fontSize: '1.1rem', color: '#1565c0', marginTop: '1.2rem', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                    {parseBold(trimmed.replace(/^###\s+/, ''))}
+                </h3>
+            );
+        } else if (trimmed === '---') {
+            elements.push(
+                <hr key={`hr-${keyIdx++}`} style={{ border: 'none', borderTop: '1px solid #e0e0e0', margin: '1.5rem 0' }} />
+            );
+        } else if (trimmed.startsWith('• ') || trimmed.startsWith('- ')) {
+            elements.push(
+                <li key={`li-${keyIdx++}`} style={{ marginLeft: '1.5rem', marginBottom: '0.5rem', color: '#333', lineHeight: '1.6' }}>
+                    {parseBold(trimmed.substring(2))}
+                </li>
+            );
+        } else {
+            elements.push(
+                <p key={`p-${keyIdx++}`} style={{ marginBottom: '0.8rem', lineHeight: '1.6', color: '#333' }}>
+                    {parseBold(trimmed)}
+                </p>
+            );
+        }
+    });
+
+    return <div className="formatted-summary-content">{elements}</div>;
+};
+
 const CapituloView = ({ externalRef }) => {
-    useEffect(() => { if (externalRef && externalRef !== ref) setRef(externalRef); }, [externalRef]);
     const [ref, setRef] = useState('');
-    const [result, setResult] = useState(null);
+    const [summary, setSummary] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [fullTextModal, setFullTextModal] = useState({ show: false, text: '', title: '' });
     const [loadingText, setLoadingText] = useState(false);
-    const [usedCommentaries, setUsedCommentaries] = useState<any[]>([]);
 
     const [bhsChapterWords, setBhsChapterWords] = useState<any[]>([]);
     const [selectedBhsWord, setSelectedBhsWord] = useState<any | null>(null);
     const [bhsAiAnalysis, setBhsAiAnalysis] = useState('');
     const [loadingBhsAi, setLoadingBhsAi] = useState(false);
+
+    useEffect(() => { 
+        if (externalRef && externalRef !== ref) setRef(externalRef); 
+    }, [externalRef]);
+
+    const loadSummary = useCallback(async (targetRef: string) => {
+        if (!targetRef) return;
+        setLoading(true);
+        setError('');
+        setSummary(null);
+
+        try {
+            const data = await fetchChapterSummary(targetRef);
+            if (data) {
+                setSummary(data);
+            } else {
+                setError(`Resumo do capítulo não encontrado no banco de dados para ${targetRef}.`);
+            }
+        } catch (e: any) {
+            console.error(e);
+            setError('Falha ao carregar o resumo do capítulo.');
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (ref) {
+            loadSummary(ref);
+        }
+    }, [ref, loadSummary]);
 
     const bhsWordsByVerse = React.useMemo(() => {
         const map: Record<number, any[]> = {};
@@ -1479,7 +1603,6 @@ Retorne um texto bem formatado em Markdown com títulos curtos.`;
             if (text && !text.startsWith("Capítulo não encontrado") && !text.startsWith("Referência inválida")) {
                 setFullTextModal({ show: true, text: text, title: ref });
                 
-                // Fetch BHS text as well
                 const match = ref.match(/^(.+?)\s+(\d+)/);
                 if (match) {
                     const bookName = match[1].trim();
@@ -1504,179 +1627,42 @@ Retorne um texto bem formatado em Markdown com títulos curtos.`;
         }
     }, [ref]);
 
-    const handleAnalyze = useCallback(async (more = false) => {
-        if (!ref) return;
-        if (!more) {
-            window.dispatchEvent(new CustomEvent('reset-all'));
-        }
-        setLoading(true);
-        setError('');
-        setUsedCommentaries([]);
-
-        // Preserve existing data when loading more themes
-        const previousResult = more ? result : null;
-
-        let existingTitles = '';
-        if (more && result && result.temasImportantes) {
-            existingTitles = `Os seguintes temas já foram abordados e NÃO devem ser repetidos: ${result.temasImportantes.map(t => t.titulo).join(', ')}. Gere 3 temas IMPORTANTES e TOTALMENTE NOVOS que ainda não foram abordados, com abordagens teológicas e focos completamente diferentes dos anteriores.`;
-        }
-        if (!more) setResult(null);
-
-        try {
-            const commentaries = await fetchCommentaries(ref);
-            setUsedCommentaries(commentaries);
-
-            const currentProvider = localStorage.getItem('ai_provider') || 'ollama';
-
-            if (currentProvider === 'supabase') {
-                const chapterText = await getBibleTextFromRef(ref);
-                const temas = commentaries.length > 0
-                    ? commentaries.map(c => ({
-                        titulo: `Comentário de ${c.author}${c.verse ? ` (Versículo ${c.verse})` : ' (Capítulo)'}`,
-                        explicacao: c.text,
-                        versiculos: c.verse ? `${c.verse}` : 'Capítulo inteiro',
-                        versiculosTexto: null
-                    }))
-                    : [{
-                        titulo: `Capítulo ${ref} (Sem comentários cadastrados)`,
-                        explicacao: 'Nenhum comentário cadastrado no Supabase para este capítulo. Use a aba Obras para anexar ou escanear comentários.',
-                        versiculos: '—',
-                        versiculosTexto: null
-                    }];
-
-                setResult({
-                    sinteseCapitulo: chapterText && !chapterText.startsWith('Capítulo não encontrado')
-                        ? `[Busca Direta Supabase - Sem IA]\n\nTexto Bíblico de ${ref}:\n${chapterText}`
-                        : `[Busca Direta Supabase - Sem IA]\n\nForam encontrados ${commentaries.length} comentário(s) no banco de dados para ${ref}.`,
-                    temasImportantes: previousResult ? [...previousResult.temasImportantes, ...temas] : temas
-                });
-                return;
-            }
-
-            let prompt = `IMPORTANTE: Responda SEMPRE em português brasileiro correto, com acentuação completa e grafia correta.\n\nFaça uma análise aprofundada do capítulo ${ref}. Forneça uma síntese do capítulo e identifique os 3 temas mais importantes com seus versículos chave. ${existingTitles}`;
-            
-            if (commentaries.length > 0) {
-                prompt += `\n\nConsidere e incorpore ativamente em sua análise teológica as informações dos seguintes comentários históricos de apoio:\n`;
-                commentaries.forEach(c => {
-                    const verseInfo = c.verse ? ` (Versículo ${c.verse})` : '';
-                    prompt += `- Comentário de ${c.author}${verseInfo}: "${c.text}"\n`;
-                });
-            }
-
-            const responseText = await generateAIContent({
-                prompt,
-                isJson: true,
-                config: {
-                    responseMimeType: "application/json",
-                    responseSchema: {
-                        type: Type.OBJECT,
-                        properties: {
-                            sinteseCapitulo: { type: Type.STRING },
-                            temasImportantes: {
-                                type: Type.ARRAY,
-                                items: {
-                                    type: Type.OBJECT,
-                                    properties: {
-                                        titulo: { type: Type.STRING },
-                                        explicacao: { type: Type.STRING },
-                                        versiculos: { type: Type.STRING }
-                                    },
-                                    required: ['titulo', 'explicacao', 'versiculos']
-                                }
-                            }
-                        },
-                        required: ['sinteseCapitulo', 'temasImportantes']
-                    }
-                }
-            });
-            const jsonResult = JSON.parse(responseText);
-            const newTemas = await Promise.all(jsonResult.temasImportantes.map(async (tema: { titulo: string; explicacao: string; versiculos: string }) => {
-                const text = await getBibleTextFromRef(ref, tema.versiculos);
-                return { ...tema, versiculosTexto: text };
-            }));
-            // If "more", append new themes to existing ones and keep existing sinteseCapitulo
-            if (more && previousResult) {
-                setResult({
-                    sinteseCapitulo: previousResult.sinteseCapitulo,
-                    temasImportantes: [...previousResult.temasImportantes, ...newTemas]
-                });
-            } else {
-                setResult({ ...jsonResult, temasImportantes: newTemas });
-            }
-        } catch (e) {
-            setError(formatGeminiError(e, 'Falha ao analisar o capítulo.'));
-        } finally {
-            setLoading(false);
-        }
-    }, [ref, result]);
-
     return (
         <div className="tab-content">
-            
-            <div className="form-group" style={{ position: 'relative', width: '100%', margin: '0 0 1rem 0', display: 'block' }}>
+            <div className="form-group" style={{ position: 'relative', width: '100%', margin: '0 0 1rem 0', display: 'flex', gap: '10px', alignItems: 'center' }}>
                 <input 
                     type="text" 
                     value={ref} 
                     onChange={e => setRef(e.target.value)} 
-                    onKeyDown={e => e.key === 'Enter' && handleAnalyze()} 
+                    onKeyDown={e => e.key === 'Enter' && loadSummary(ref)} 
                     placeholder="Ex: Gênesis 1" 
-                    style={{ width: '100%', paddingRight: '40px' }}
+                    style={{ flex: 1, padding: '8px 12px', fontSize: '1rem', border: '1px solid #ccc', borderRadius: '4px' }}
                 />
-                <span 
-                    onClick={() => !loading && handleAnalyze()} 
-                    title="Analisar"
-                    style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '1.2rem', opacity: loading ? 0.5 : 1, userSelect: 'none', color: '#616161' }}
+                <button 
+                    onClick={() => loadSummary(ref)} 
+                    disabled={loading}
+                    style={{ backgroundColor: '#0d47a1', color: '#fff', border: 'none', borderRadius: '4px', padding: '8px 16px', cursor: loading ? 'not-allowed' : 'pointer', fontWeight: 'bold', fontSize: '0.9rem' }}
                 >
-                    {loading ? '⏳' : (
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
-                            <circle cx="11" cy="11" r="8"></circle>
-                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                        </svg>
-                    )}
-                </span>
+                    {loading ? 'Buscando...' : 'Buscar Capítulo'}
+                </button>
+                <button 
+                    onClick={handleViewText} 
+                    disabled={loadingText}
+                    style={{ backgroundColor: '#e3f2fd', color: '#1565c0', border: '1px solid #90caf9', borderRadius: '4px', padding: '8px 16px', cursor: loadingText ? 'not-allowed' : 'pointer', fontWeight: 'bold', fontSize: '0.9rem' }}
+                >
+                    {loadingText ? 'Carregando Texto...' : 'Ver Texto Bíblico'}
+                </button>
             </div>
+
             {loading && <LoadingSpinner />}
             {error && <ErrorMessage message={error} />}
-            {result && (
-                <div>
-                    {usedCommentaries.length > 0 && (
-                        <div style={{ fontSize: '0.85rem', color: '#1565c0', backgroundColor: '#e3f2fd', padding: '10px 15px', borderRadius: '6px', marginBottom: '15px', borderLeft: '4px solid #2196f3' }}>
-                            <strong>📖 Comentários utilizados do Supabase:</strong> {Array.from(new Set(usedCommentaries.map(c => c.author))).join(', ')}
-                        </div>
-                    )}
-                    <div className="card">
-                        <h3>Síntese do Capítulo</h3>
-                        {(result.sinteseCapitulo || '').split(/\n+/).filter(p => p.trim()).map((p, i) => (
-                            <div key={i} style={{ marginBottom: '1rem' }}>
-                                <p>{p}</p>
-                            </div>
-                        ))}
-                    </div>
-                    <h3>Temas Importantes</h3>
-                    {(result.temasImportantes || []).map((tema, i) => (
-                        <div className="card" key={i}>
-                            <h4>{tema.titulo}</h4>
-                            <p>{tema.explicacao}</p>
-                            <p><strong>Versículos:</strong> {tema.versiculos}</p>
-                            {tema.versiculosTexto && (
-                                <blockquote style={{ fontStyle: 'italic', borderLeft: '4px solid #2196F3', paddingLeft: '1rem', margin: '0.5rem 0' }}>
-                                    {parseBold(tema.versiculosTexto)}
-                                </blockquote>
-                            )}
-                            <div className="quote-actions" style={{ justifyContent: 'flex-start', marginTop: '10px', gap: '10px' }}>
-                                <button onClick={() => window.dispatchEvent(new CustomEvent('analyze-verse', { detail: `${ref}:${tema.versiculos}` }))}>
-                                    Análise do versículo
-                                </button>
-                            </div>
-                        </div>
-                    ))}
-                    <div className="more-buttons" style={{ marginTop: '20px' }}>
-                        <button onClick={() => handleAnalyze(true)} disabled={loading} className="full-width-button">
-                            {loading ? 'Gerando Novos Temas...' : 'Novos Temas'}
-                        </button>
-                    </div>
+
+            {summary && (
+                <div className="card" style={{ padding: '20px', backgroundColor: '#ffffff', borderRadius: '8px', border: '1px solid #e0e0e0', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+                    {renderFormattedSummary(summary)}
                 </div>
             )}
+
             {fullTextModal.show && (
                 <div style={{
                     position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
@@ -2481,7 +2467,7 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
     );
 };
 
-const PensamentosView = ({ externalSearch }) => {
+const PensamentosView = ({ externalSearch }: { externalSearch?: string }) => {
     useEffect(() => { if (externalSearch && externalSearch !== topic) setTopic(externalSearch); }, [externalSearch]);
     const [topic, setTopic] = useState('');
     const [quotes, setQuotes] = useState([]);
@@ -2620,7 +2606,7 @@ const renderFonteLink = (fonte: string) => {
     );
 };
 
-const IlustracoesView = ({ externalSearch }) => {
+const IlustracoesView = ({ externalSearch }: { externalSearch?: string }) => {
     useEffect(() => { if (externalSearch && externalSearch !== theme) setTheme(externalSearch); }, [externalSearch]);
     const [theme, setTheme] = useState('');
     const [illustrations, setIllustrations] = useState([]);
@@ -2781,7 +2767,7 @@ const ALL_BOOKS = Object.values(NAA_BOOKS).flat();
 
 
 const LeftSidebar = ({ selectedBook, setSelectedBook, selectedChapter, setSelectedChapter, selectedVerse, setSelectedVerse }) => {
-    const allBooks = Object.values(BIBLIA_STRUCTURE).flatMap(t => t.col1.concat(t.col2 || []).filter(Boolean));
+    const allBooks: any[] = Object.values(BIBLIA_STRUCTURE).flatMap((t: any) => t.col1.concat(t.col2 || []).filter(Boolean));
     const [searchTerm, setSearchTerm] = useState('');
     const filteredBooks = searchTerm ? allBooks.filter(b => b.name.toLowerCase().includes(searchTerm.toLowerCase())) : allBooks;
 
