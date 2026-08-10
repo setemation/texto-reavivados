@@ -3156,42 +3156,7 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
                                 {/* NAA Text */}
                                 <p style={{ margin: 0, fontSize: '16px', lineHeight: '1.7', textAlign: 'left' }}>
                                     <strong>{v.num} </strong>
-                                    {v.text.split(/(\s+)/).map((part, index) => {
-                                        if (!part.trim()) return <span key={index}>{part}</span>;
-                                        const keyId = `${v.num}-${index}`;
-                                        return (
-                                            <span key={index} style={{ position: 'relative', display: 'inline-block' }}>
-                                                <span
-                                                    onClick={() => setSelectedVerseWordIndex(selectedVerseWordIndex === keyId ? null : keyId)}
-                                                    style={{ 
-                                                        cursor: 'pointer', 
-                                                        padding: '2px', 
-                                                        borderRadius: '3px',
-                                                        backgroundColor: selectedVerseWordIndex === keyId ? '#e0f7fa' : 'transparent',
-                                                        transition: 'background-color 0.2s'
-                                                    }}
-                                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = selectedVerseWordIndex === keyId ? '#e0f7fa' : '#f5f5f5'}
-                                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = selectedVerseWordIndex === keyId ? '#e0f7fa' : 'transparent'}
-                                                >
-                                                    {parseBold(part)}
-                                                </span>
-                                                {selectedVerseWordIndex === keyId && (
-                                                    <div style={{
-                                                        position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
-                                                        backgroundColor: 'white', border: '1px solid #ccc', boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
-                                                        borderRadius: '4px', padding: '8px', zIndex: 10, marginTop: '4px', whiteSpace: 'nowrap'
-                                                    }}>
-                                                        <button 
-                                                            onClick={() => handleVerseWordDeepAnalysis(v.num, index, part)}
-                                                            style={{ padding: '6px 12px', fontSize: '0.85rem', margin: 0, backgroundColor: '#1565C0', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                                                        >
-                                                            Análise Profunda
-                                                        </button>
-                                                    </div>
-                                                )}
-                                            </span>
-                                        );
-                                    })}
+                                    {parseBold(v.text)}
                                 </p>
                                 
                                 {/* BHS Text */}
