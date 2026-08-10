@@ -1629,29 +1629,26 @@ Retorne um texto bem formatado em Markdown com títulos curtos.`;
 
     return (
         <div className="tab-content">
-            <div className="form-group" style={{ position: 'relative', width: '100%', margin: '0 0 1rem 0', display: 'flex', gap: '10px', alignItems: 'center' }}>
-                <input 
-                    type="text" 
-                    value={ref} 
-                    onChange={e => setRef(e.target.value)} 
-                    onKeyDown={e => e.key === 'Enter' && loadSummary(ref)} 
-                    placeholder="Ex: Gênesis 1" 
-                    style={{ flex: 1, padding: '8px 12px', fontSize: '1rem', border: '1px solid #ccc', borderRadius: '4px' }}
-                />
-                <button 
-                    onClick={() => loadSummary(ref)} 
-                    disabled={loading}
-                    style={{ backgroundColor: '#0d47a1', color: '#fff', border: 'none', borderRadius: '4px', padding: '8px 16px', cursor: loading ? 'not-allowed' : 'pointer', fontWeight: 'bold', fontSize: '0.9rem' }}
-                >
-                    {loading ? 'Buscando...' : 'Buscar Capítulo'}
-                </button>
-                <button 
-                    onClick={handleViewText} 
-                    disabled={loadingText}
-                    style={{ backgroundColor: '#e3f2fd', color: '#1565c0', border: '1px solid #90caf9', borderRadius: '4px', padding: '8px 16px', cursor: loadingText ? 'not-allowed' : 'pointer', fontWeight: 'bold', fontSize: '0.9rem' }}
-                >
-                    {loadingText ? 'Carregando Texto...' : 'Ver Texto Bíblico'}
-                </button>
+            <div style={{ margin: '0 0 1rem 0', width: '100%' }}>
+                <div style={{ 
+                    width: '30%', 
+                    backgroundColor: '#fff', 
+                    border: '1px solid #ccc', 
+                    borderRadius: '4px', 
+                    padding: '0.5rem 0.75rem', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'flex-start', 
+                    fontWeight: 'normal', 
+                    color: 'inherit', 
+                    fontSize: '0.9rem', 
+                    boxSizing: 'border-box', 
+                    whiteSpace: 'nowrap', 
+                    overflow: 'hidden', 
+                    textOverflow: 'ellipsis' 
+                }}>
+                    {ref || 'Selecione o capítulo'}
+                </div>
             </div>
 
             {loading && <LoadingSpinner />}
