@@ -16,6 +16,17 @@ export default defineConfig(({ mode }) => {
         {
           name: 'ollama-launcher',
           configureServer(server) {
+            // Auto-start Translator server (port 3001)
+            try {
+              const translatorServerPath = path.resolve(__dirname, 'translator', 'server.mjs');
+              exec(`node "${translatorServerPath}"`, (err) => {
+                if (err && !err.killed) console.log('[Translator Launcher] Note:', err.message);
+              });
+              console.log('[Translator Launcher] Servidor de Tradução inicializado na porta 3001.');
+            } catch (e: any) {
+              console.error('[Translator Launcher] Erro ao iniciar:', e.message);
+            }
+
             server.middlewares.use('/api/start-ollama', (req, res, next) => {
               if (req.method !== 'POST') return next();
               res.setHeader('Content-Type', 'application/json');

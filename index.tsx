@@ -1,4 +1,4 @@
-import React, { useState, useCallback, Fragment, useEffect } from 'react';
+import React, { useState, useCallback, Fragment, useEffect, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { GoogleGenAI, Type } from "@google/genai";
 import { supabase, isSupabaseConfigured } from './supabase';
@@ -2902,6 +2902,97 @@ const CenterContent = ({ selectedBook, selectedChapter, selectedVerse }) => {
     const [originalVerses, setOriginalVerses] = useState([]);
     const [loadingOriginal, setLoadingOriginal] = useState(false);
 
+    // Strongs Dictionary State
+    const [strongsData, setStrongsData] = useState([]);
+    const [loadingStrongs, setLoadingStrongs] = useState(false);
+    const [strongsSearch, setStrongsSearch] = useState('');
+    const [strongsTypeFilter, setStrongsTypeFilter] = useState('ALL'); // 'ALL', 'H', 'G'
+    const [strongsVisibleCount, setStrongsVisibleCount] = useState(50);
+
+    // Fetch Strongs dictionary when Dicionário tab is activated or search query is set
+    useEffect(() => {
+        if ((activeTab === 'Dicionário' || strongsSearch) && strongsData.length === 0 && !loadingStrongs) {
+            setLoadingStrongs(true);
+            fetch('/strongs.json')
+                .then(res => res.json())
+                .then(data => {
+                    setStrongsData(data || []);
+                    setLoadingStrongs(false);
+                })
+                .catch(e => {
+                    console.error('Erro ao carregar dicionário Strong:', e);
+                    setLoadingStrongs(false);
+                });
+        }
+    }, [activeTab, strongsSearch, strongsData.length, loadingStrongs]);
+
+    const handleSelectStrongCode = useCallback((code: string) => {
+        if (!code) return;
+        const cleanCode = code.trim();
+        setStrongsSearch(cleanCode);
+        setStrongsVisibleCount(50);
+        setActiveTab('Dicionário');
+    }, []);
+
+    const filteredStrongsList = useMemo(() => {
+        if (!strongsData || strongsData.length === 0) return [];
+        let items = strongsData;
+        
+        if (strongsTypeFilter === 'H') {
+            items = items.filter((i: any) => i.number && i.number.startsWith('H'));
+        } else if (strongsTypeFilter === 'G') {
+            items = items.filter((i: any) => i.number && i.number.startsWith('G'));
+        }
+
+        if (!strongsSearch || !strongsSearch.trim()) {
+            return items;
+        }
+
+        const query = strongsSearch.trim();
+        const upperQuery = query.toUpperCase();
+        const lowerQuery = query.toLowerCase();
+        const normQuery = upperQuery.replace(/^([HG])0+/, '$1');
+
+        const matches = items.filter((item: any) => {
+            if (!item) return false;
+            const itemCode = (item.number || '').toUpperCase();
+            const normItemCode = itemCode.replace(/^([HG])0+/, '$1');
+
+            if (normItemCode === normQuery || itemCode === upperQuery) return true;
+            if (itemCode.toLowerCase().includes(lowerQuery)) return true;
+            if (item.lemma && item.lemma.includes(query)) return true;
+            if (item.xlit && item.xlit.toLowerCase().includes(lowerQuery)) return true;
+            if (item.description && item.description.toLowerCase().includes(lowerQuery)) return true;
+            if (item.pronounce && item.pronounce.toLowerCase().includes(lowerQuery)) return true;
+            return false;
+        });
+
+        return matches.sort((a: any, b: any) => {
+            const codeA = (a.number || '').toUpperCase();
+            const codeB = (b.number || '').toUpperCase();
+            const normA = codeA.replace(/^([HG])0+/, '$1');
+            const normB = codeB.replace(/^([HG])0+/, '$1');
+
+            const exactA = normA === normQuery || codeA === upperQuery;
+            const exactB = normB === normQuery || codeB === upperQuery;
+
+            if (exactA && !exactB) return -1;
+            if (!exactA && exactB) return 1;
+
+            const startsA = normA.startsWith(normQuery) || codeA.startsWith(upperQuery);
+            const startsB = normB.startsWith(normQuery) || codeB.startsWith(upperQuery);
+
+            if (startsA && !startsB) return -1;
+            if (!startsA && startsB) return 1;
+
+            return 0;
+        });
+    }, [strongsData, strongsSearch, strongsTypeFilter]);
+
+    const visibleStrongsList = useMemo(() => {
+        return filteredStrongsList.slice(0, strongsVisibleCount);
+    }, [filteredStrongsList, strongsVisibleCount]);
+
     // Deep Analysis State for NAA
     const [selectedVerseWordIndex, setSelectedVerseWordIndex] = useState(null); // format: "verseNum-wordIndex"
     const [verseWordDeepAnalysis, setVerseWordDeepAnalysis] = useState({});
@@ -3219,6 +3310,7 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
                         <div className={`analysis-tab ${activeTab === 'Versículo' ? 'active' : ''}`} onClick={() => setActiveTab('Versículo')}>Versículo</div>
                         <div className={`analysis-tab ${activeTab === 'Comentários' ? 'active' : ''}`} onClick={() => setActiveTab('Comentários')}>Comentários</div>
                         <div className={`analysis-tab ${activeTab === 'Original' ? 'active' : ''}`} onClick={() => setActiveTab('Original')}>Original</div>
+                        <div className={`analysis-tab ${activeTab === 'Dicionário' ? 'active' : ''}`} onClick={() => setActiveTab('Dicionário')}>Dicionário</div>
                     </div>
                     <div style={{ paddingRight: '10px', display: 'flex', alignItems: 'center' }}>
                         <button 
@@ -3333,7 +3425,14 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
                                                                 <tbody>
                                                                     {words.map((w, idx) => (
                                                                         <tr key={idx}>
-                                                                            <td className="strongs-col">{w.strongs}</td>
+                                                                            <td 
+                                                                                className="strongs-col" 
+                                                                                style={{ cursor: 'pointer', textDecoration: 'underline', fontWeight: 'bold' }}
+                                                                                onClick={() => handleSelectStrongCode(w.strongs)}
+                                                                                title={`Ver ${w.strongs} no Dicionário Strong`}
+                                                                            >
+                                                                                {w.strongs}
+                                                                            </td>
                                                                             <td className="original-col">
                                                                                 <div className="orig-text">{w.original}</div>
                                                                                 <div className="translit-text">{w.translit}</div>
@@ -3351,6 +3450,180 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
                                         </div>
                                     )}
                                 </>
+                            )}
+                        </div>
+                    )}
+                    {activeTab === 'Dicionário' && (
+                        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '1rem', overflowY: 'auto', paddingRight: '5px' }}>
+                            {loadingStrongs ? <LoadingSpinner /> : (
+                                <div className="original-version-container">
+                                    <div className="original-verse-block">
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '10px' }}>
+                                            <h4 className="original-verse-num" style={{ margin: 0, borderBottom: 'none' }}>
+                                                📖 Dicionário Strong ({filteredStrongsList.length} verbetes)
+                                            </h4>
+                                            <div style={{ display: 'flex', gap: '6px' }}>
+                                                <button 
+                                                    onClick={() => { setStrongsTypeFilter('ALL'); setStrongsVisibleCount(50); }}
+                                                    style={{ 
+                                                        backgroundColor: strongsTypeFilter === 'ALL' ? '#0d47a1' : '#f0f4f9', 
+                                                        color: strongsTypeFilter === 'ALL' ? '#fff' : '#0d47a1',
+                                                        border: '1px solid #d0e2f7',
+                                                        borderRadius: '4px',
+                                                        padding: '4px 10px',
+                                                        fontSize: '0.8rem',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    Todos
+                                                </button>
+                                                <button 
+                                                    onClick={() => { setStrongsTypeFilter('H'); setStrongsVisibleCount(50); }}
+                                                    style={{ 
+                                                        backgroundColor: strongsTypeFilter === 'H' ? '#d84315' : '#fbe9e7', 
+                                                        color: strongsTypeFilter === 'H' ? '#fff' : '#d84315',
+                                                        border: '1px solid #ffccbc',
+                                                        borderRadius: '4px',
+                                                        padding: '4px 10px',
+                                                        fontSize: '0.8rem',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    Hebraico (H)
+                                                </button>
+                                                <button 
+                                                    onClick={() => { setStrongsTypeFilter('G'); setStrongsVisibleCount(50); }}
+                                                    style={{ 
+                                                        backgroundColor: strongsTypeFilter === 'G' ? '#00695c' : '#e0f2f1', 
+                                                        color: strongsTypeFilter === 'G' ? '#fff' : '#00695c',
+                                                        border: '1px solid #b2dfdb',
+                                                        borderRadius: '4px',
+                                                        padding: '4px 10px',
+                                                        fontSize: '0.8rem',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    Grego (G)
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div style={{ position: 'relative', marginBottom: '15px' }}>
+                                            <input 
+                                                type="text" 
+                                                placeholder="Digite o código Strong (ex: H1, G25) ou palavra..." 
+                                                value={strongsSearch}
+                                                onChange={(e) => {
+                                                    setStrongsSearch(e.target.value);
+                                                    setStrongsVisibleCount(50);
+                                                }}
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '10px 36px 10px 12px',
+                                                    borderRadius: '6px',
+                                                    border: '1px solid #ccc',
+                                                    fontSize: '0.95rem'
+                                                }}
+                                            />
+                                            {strongsSearch && (
+                                                <button 
+                                                    onClick={() => { setStrongsSearch(''); setStrongsVisibleCount(50); }}
+                                                    style={{
+                                                        position: 'absolute',
+                                                        right: '8px',
+                                                        top: '50%',
+                                                        transform: 'translateY(-50%)',
+                                                        background: 'transparent',
+                                                        border: 'none',
+                                                        color: '#888',
+                                                        cursor: 'pointer',
+                                                        fontSize: '1rem',
+                                                        padding: '4px'
+                                                    }}
+                                                    title="Limpar busca"
+                                                >
+                                                    ✕
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {filteredStrongsList.length === 0 ? (
+                                            <div style={{ color: '#666', textAlign: 'center', padding: '2rem' }}>
+                                                Nenhum verbete encontrado no Dicionário Strong para "{strongsSearch}".
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <div className="original-table-wrapper">
+                                                    <table className="original-interlinear-table">
+                                                        <thead>
+                                                            <tr>
+                                                                <th style={{ width: '12%' }}>Strong</th>
+                                                                <th style={{ width: '22%' }}>Original</th>
+                                                                <th style={{ width: '22%' }}>Transliteração / Pronúncia</th>
+                                                                <th style={{ width: '44%' }}>Descrição / Tradução</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {visibleStrongsList.map((item: any, idx: number) => {
+                                                                const isMatch = strongsSearch && (
+                                                                    item.number.toUpperCase() === strongsSearch.trim().toUpperCase() || 
+                                                                    item.number.toUpperCase().replace(/^([HG])0+/, '$1') === strongsSearch.trim().toUpperCase().replace(/^([HG])0+/, '$1')
+                                                                );
+                                                                return (
+                                                                    <tr key={item.number || idx} style={isMatch ? { backgroundColor: '#e3f2fd' } : {}}>
+                                                                        <td className="strongs-col" style={{ fontWeight: 'bold' }}>
+                                                                            <span style={{
+                                                                                display: 'inline-block',
+                                                                                padding: '2px 6px',
+                                                                                borderRadius: '4px',
+                                                                                backgroundColor: item.number.startsWith('H') ? '#fbe9e7' : '#e0f2f1',
+                                                                                color: item.number.startsWith('H') ? '#d84315' : '#00695c'
+                                                                            }}>
+                                                                                {item.number}
+                                                                            </span>
+                                                                        </td>
+                                                                        <td className="original-col">
+                                                                            <div className="orig-text">{item.lemma}</div>
+                                                                        </td>
+                                                                        <td>
+                                                                            <div className="translit-text" style={{ fontSize: '0.95rem', fontWeight: 500, color: '#333' }}>{item.xlit}</div>
+                                                                            {item.pronounce && (
+                                                                                <div style={{ fontSize: '0.8rem', color: '#777', fontStyle: 'italic' }}>
+                                                                                    [{item.pronounce}]
+                                                                                </div>
+                                                                            )}
+                                                                        </td>
+                                                                        <td className="english-col" style={{ lineHeight: '1.5' }}>
+                                                                            {item.description}
+                                                                        </td>
+                                                                    </tr>
+                                                                );
+                                                            })}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                                {filteredStrongsList.length > strongsVisibleCount && (
+                                                    <div style={{ textAlign: 'center', marginTop: '15px' }}>
+                                                        <button 
+                                                            onClick={() => setStrongsVisibleCount(prev => prev + 100)}
+                                                            style={{
+                                                                backgroundColor: '#f0f6ff',
+                                                                color: '#0d47a1',
+                                                                border: '1px solid #d0e2f7',
+                                                                padding: '8px 20px',
+                                                                borderRadius: '6px',
+                                                                cursor: 'pointer',
+                                                                fontWeight: 'bold'
+                                                            }}
+                                                        >
+                                                            Carregar mais ({strongsVisibleCount} de {filteredStrongsList.length})
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
                             )}
                         </div>
                     )}
@@ -3496,14 +3769,21 @@ const App = () => {
         localStorage.setItem('ollama_url', val);
     };
 
-    useEffect(() => { localStorage.setItem('ai_provider', provider); }, [provider]);
-    useEffect(() => { localStorage.setItem('ollama_model', ollamaModel); }, [ollamaModel]);
-    useEffect(() => { localStorage.setItem('ollama_url', ollamaUrl); }, [ollamaUrl]);
+    const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState(() => {
+        return localStorage.getItem('rightSidebarCollapsed') === 'true';
+    });
+
+    useEffect(() => {
+        localStorage.setItem('rightSidebarCollapsed', String(isRightSidebarCollapsed));
+    }, [isRightSidebarCollapsed]);
 
     return (
         <div className="app-container">
             
-            <header>
+            <header style={{ 
+                gridTemplateColumns: isRightSidebarCollapsed ? '260px 1fr auto' : '260px 1fr 532px',
+                transition: 'grid-template-columns 0.3s ease'
+            }}>
                 <div>
                     <h1>Redator Bíblia</h1>
                 </div>
@@ -3514,7 +3794,7 @@ const App = () => {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
                     <a
-                        href="http://localhost:3001"
+                        href={typeof window !== 'undefined' ? `http://${window.location.hostname || 'localhost'}:3001` : 'http://localhost:3001'}
                         target="_blank"
                         rel="noopener noreferrer"
                         style={{
@@ -3586,7 +3866,10 @@ const App = () => {
                 </div>
             )}
 
-            <main>
+            <main style={{ 
+                gridTemplateColumns: isRightSidebarCollapsed ? '260px 1fr 32px' : '260px 1fr 532px',
+                transition: 'grid-template-columns 0.3s ease'
+            }}>
                 <div className="sidebar-left">
                     <LeftSidebar 
                         selectedBook={selectedBook} setSelectedBook={setSelectedBook}
@@ -3603,12 +3886,48 @@ const App = () => {
                     />
                 </div>
                 
-                <div className="sidebar-right">
-                    <RightSidebar 
-                        selectedBook={selectedBook}
-                        selectedChapter={selectedChapter}
-                        selectedVerse={selectedVerse}
-                    />
+                <div className="sidebar-right" style={{ 
+                    position: 'relative', 
+                    padding: isRightSidebarCollapsed ? '0' : '0.75rem',
+                    overflow: isRightSidebarCollapsed ? 'visible' : 'hidden',
+                    transition: 'all 0.3s ease'
+                }}>
+                    <button
+                        onClick={() => setIsRightSidebarCollapsed(!isRightSidebarCollapsed)}
+                        style={{
+                            position: 'absolute',
+                            left: isRightSidebarCollapsed ? '50%' : '-15px',
+                            top: '50%',
+                            transform: isRightSidebarCollapsed ? 'translate(-50%, -50%)' : 'translateY(-50%)',
+                            zIndex: 50,
+                            width: '28px',
+                            height: '48px',
+                            backgroundColor: '#ffffff',
+                            border: '1px solid #c0d1e5',
+                            borderRadius: isRightSidebarCollapsed ? '6px' : '6px 0 0 6px',
+                            boxShadow: '-2px 0 6px rgba(0, 0, 0, 0.12)',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#0d47a1',
+                            fontSize: '1rem',
+                            fontWeight: 'bold',
+                            padding: 0,
+                            transition: 'all 0.2s ease'
+                        }}
+                        title={isRightSidebarCollapsed ? "Expandir painel direito" : "Recolher painel direito"}
+                    >
+                        {isRightSidebarCollapsed ? '◀' : '▶'}
+                    </button>
+
+                    {!isRightSidebarCollapsed && (
+                        <RightSidebar 
+                            selectedBook={selectedBook}
+                            selectedChapter={selectedChapter}
+                            selectedVerse={selectedVerse}
+                        />
+                    )}
                 </div>
             </main>
         </div>
