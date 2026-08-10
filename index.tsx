@@ -2902,6 +2902,9 @@ const CenterContent = ({ selectedBook, selectedChapter, selectedVerse }) => {
     const [originalVerses, setOriginalVerses] = useState([]);
     const [loadingOriginal, setLoadingOriginal] = useState(false);
 
+    // Interlinear State for BHS
+    const [selectedBhsWord, setSelectedBhsWord] = useState(null);
+
     // Strongs Dictionary State
     const [strongsData, setStrongsData] = useState([]);
     const [loadingStrongs, setLoadingStrongs] = useState(false);
@@ -2909,9 +2912,9 @@ const CenterContent = ({ selectedBook, selectedChapter, selectedVerse }) => {
     const [strongsTypeFilter, setStrongsTypeFilter] = useState('ALL'); // 'ALL', 'H', 'G'
     const [strongsVisibleCount, setStrongsVisibleCount] = useState(50);
 
-    // Fetch Strongs dictionary when Dicionário tab is activated or search query is set
+    // Fetch Strongs dictionary when Dicionário tab is activated, search query is set, or a BHS word is selected
     useEffect(() => {
-        if ((activeTab === 'Dicionário' || strongsSearch) && strongsData.length === 0 && !loadingStrongs) {
+        if ((activeTab === 'Dicionário' || strongsSearch || selectedBhsWord) && strongsData.length === 0 && !loadingStrongs) {
             setLoadingStrongs(true);
             fetch('/strongs.json')
                 .then(res => res.json())
@@ -2924,7 +2927,7 @@ const CenterContent = ({ selectedBook, selectedChapter, selectedVerse }) => {
                     setLoadingStrongs(false);
                 });
         }
-    }, [activeTab, strongsSearch, strongsData.length, loadingStrongs]);
+    }, [activeTab, strongsSearch, selectedBhsWord, strongsData.length, loadingStrongs]);
 
     const handleSelectStrongCode = useCallback((code: string) => {
         if (!code) return;
@@ -2999,8 +3002,6 @@ const CenterContent = ({ selectedBook, selectedChapter, selectedVerse }) => {
     const [deepAnalysisModalOpen, setDeepAnalysisModalOpen] = useState(false);
     const [currentDeepAnalysis, setCurrentDeepAnalysis] = useState(null);
 
-    // Interlinear State for BHS
-    const [selectedBhsWord, setSelectedBhsWord] = useState(null);
 
     const externalRefChapter = (selectedBook && selectedChapter) ? `${selectedBook.map || selectedBook.name} ${selectedChapter}` : '';
     const externalRefVerse = (selectedBook && selectedChapter && selectedVerse) ? `${selectedBook.map || selectedBook.name} ${selectedChapter}:${selectedVerse}` : '';
@@ -3695,10 +3696,22 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
                                 <span style={{ color: '#616161', fontWeight: 'bold' }}>Significado:</span>
                                 <span style={{ color: '#212121', fontWeight: 600 }}>{selectedBhsWord.gloss}</span>
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #ddd', paddingBottom: '4px' }}>
                                 <span style={{ color: '#616161', fontWeight: 'bold' }}>Strong:</span>
-                                <a href={`https://biblehub.com/hebrew/${selectedBhsWord.strong.replace(/[^0-9]/g, '')}.htm`} target="_blank" rel="noopener noreferrer" style={{ color: '#1976d2', textDecoration: 'underline' }}>{selectedBhsWord.strong}</a>
+                                <span style={{ color: '#212121', fontWeight: 600 }}>{selectedBhsWord.strong}</span>
                             </div>
+                            {(() => {
+                                if (!selectedBhsWord.strong) return null;
+                                const cleanCode = selectedBhsWord.strong.trim().replace(/^H0*/i, 'H');
+                                const strongEntry = strongsData.find(s => s.number === cleanCode || s.number === selectedBhsWord.strong.trim());
+                                if (!strongEntry || !strongEntry.description) return null;
+                                return (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', textAlign: 'left', pt: '4px' }}>
+                                        <span style={{ color: '#616161', fontWeight: 'bold', fontSize: '0.85rem' }}>Descrição / Tradução:</span>
+                                        <span style={{ color: '#333333', fontSize: '0.9rem', lineHeight: '1.4' }}>{strongEntry.description}</span>
+                                    </div>
+                                );
+                            })()}
                         </div>
                     </div>
                 </div>
