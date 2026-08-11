@@ -4529,13 +4529,13 @@ const App = () => {
                 <div className="sidebar-right" style={{ 
                     position: 'relative', 
                     padding: isRightSidebarCollapsed ? '0' : '0.75rem',
-                    overflow: 'visible',
+                    overflow: 'hidden',
                     transition: 'all 0.3s ease'
                 }}>
                     <div style={{
-                        position: 'absolute',
-                        left: isRightSidebarCollapsed ? '50%' : '-15px',
-                        top: '50%',
+                        position: 'fixed',
+                        left: isRightSidebarCollapsed ? '50%' : 'calc(100vw - 532px - 15px)',
+                        top: '50vh',
                         transform: isRightSidebarCollapsed ? 'translate(-50%, -50%)' : 'translateY(-50%)',
                         zIndex: 50,
                         display: 'flex',
