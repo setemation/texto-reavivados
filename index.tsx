@@ -4534,7 +4534,11 @@ const App = () => {
                 }}>
                     <div style={{
                         position: 'fixed',
-                        left: isRightSidebarCollapsed ? 'calc(100vw - 16px)' : 'calc(100vw - 532px - 15px)',
+                        left: isRightSidebarCollapsed
+                            ? 'calc(100vw - 16px)'
+                            : rightSidebarMode === 'expanded-left'
+                                ? 'calc(260px - 15px)'
+                                : 'calc(100vw - 532px - 15px)',
                         top: '50vh',
                         transform: 'translate(-50%, -50%)',
                         zIndex: 50,
@@ -4543,6 +4547,7 @@ const App = () => {
                         gap: '6px',
                         alignItems: 'center'
                     }}>
+
                         {rightSidebarMode === 'normal' ? (
                             <>
                                 <button
