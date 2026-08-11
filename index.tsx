@@ -116,11 +116,250 @@ const OllamaStartButton = () => {
     );
 };
 
-// --- API Wrapper ---
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+// --- API Wrapper & Gemini Multi-Key Management ---
+export interface GeminiKeyInfo {
+    id: number;
+    name: string;
+    key: string;
+}
+
+export const GEMINI_KEYS: GeminiKeyInfo[] = [
+    { id: 0, name: 'Chave 1 (Reavivados)', key: 'AIzaSyDmXv_azHs5T5VVv5dRu6801hiWr9CBviE' },
+    { id: 1, name: 'Chave 2 (IASD Marco)', key: 'AIzaSyCLjzvKeCjHJQeUSRRQ-AAjAkaCz-iAHZM' },
+    { id: 2, name: 'Chave 3 (Pessoal)', key: 'AIzaSyCbz5nkRjCMRAr5fZtDsze6LqIOmtlacx0' },
+    { id: 3, name: 'Chave 4 (Umberto)', key: 'AIzaSyBIyC4nYlevMAFHW0QynzcMHwNOLRDr9Bw' },
+];
+
+export const getActiveGeminiKeyIndex = (): number => {
+    const saved = localStorage.getItem('gemini_active_key_index');
+    if (saved !== null) {
+        const parsed = parseInt(saved, 10);
+        if (!isNaN(parsed) && parsed >= 0 && parsed < GEMINI_KEYS.length) {
+            return parsed;
+        }
+    }
+    return 0;
+};
+
+export const getExhaustedKeys = (): Record<number, boolean> => {
+    try {
+        const saved = localStorage.getItem('gemini_exhausted_keys');
+        return saved ? JSON.parse(saved) : {};
+    } catch {
+        return {};
+    }
+};
+
+export const setKeyExhausted = (index: number, exhausted: boolean) => {
+    const exhaustedMap = getExhaustedKeys();
+    if (exhausted) {
+        exhaustedMap[index] = true;
+    } else {
+        delete exhaustedMap[index];
+    }
+    localStorage.setItem('gemini_exhausted_keys', JSON.stringify(exhaustedMap));
+    notifyGeminiKeyStateChange();
+};
+
+export const clearAllExhaustedKeys = () => {
+    localStorage.removeItem('gemini_exhausted_keys');
+    localStorage.removeItem('gemini_key_notice');
+    notifyGeminiKeyStateChange();
+};
+
+export const setActiveGeminiKeyIndex = (index: number, noticeMessage?: string) => {
+    localStorage.setItem('gemini_active_key_index', String(index));
+    if (noticeMessage) {
+        localStorage.setItem('gemini_key_notice', JSON.stringify({
+            message: noticeMessage,
+            timestamp: Date.now()
+        }));
+    } else {
+        localStorage.removeItem('gemini_key_notice');
+    }
+    notifyGeminiKeyStateChange();
+};
+
+export const getGeminiNotice = (): { message: string; timestamp: number } | null => {
+    try {
+        const saved = localStorage.getItem('gemini_key_notice');
+        return saved ? JSON.parse(saved) : null;
+    } catch {
+        return null;
+    }
+};
+
+export const clearGeminiNotice = () => {
+    localStorage.removeItem('gemini_key_notice');
+    notifyGeminiKeyStateChange();
+};
+
+export const notifyGeminiKeyStateChange = () => {
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('gemini_key_state_changed'));
+    }
+};
+
+export const isQuotaError = (e: any): boolean => {
+    if (!e) return false;
+    const msg = (e?.message || e?.toString() || '').toLowerCase();
+    const status = e?.status;
+    return (
+        status === 429 ||
+        msg.includes('429') ||
+        msg.includes('resource_exhausted') ||
+        msg.includes('spending cap') ||
+        msg.includes('quota') ||
+        msg.includes('limit') ||
+        msg.includes('rate limit') ||
+        msg.includes('too many requests')
+    );
+};
+
+const GeminiKeySelector = () => {
+    const [keyIndex, setKeyIndex] = useState(getActiveGeminiKeyIndex);
+    const [exhaustedMap, setExhaustedMap] = useState(getExhaustedKeys);
+    const [notice, setNotice] = useState(getGeminiNotice);
+
+    useEffect(() => {
+        const handleStateChange = () => {
+            setKeyIndex(getActiveGeminiKeyIndex());
+            setExhaustedMap(getExhaustedKeys());
+            setNotice(getGeminiNotice());
+        };
+
+        window.addEventListener('gemini_key_state_changed', handleStateChange);
+        return () => window.removeEventListener('gemini_key_state_changed', handleStateChange);
+    }, []);
+
+    const handleSelectKey = (idx: number) => {
+        setActiveGeminiKeyIndex(idx);
+        if (exhaustedMap[idx]) {
+            setKeyExhausted(idx, false);
+        }
+        clearGeminiNotice();
+    };
+
+    const currentKeyExhausted = !!exhaustedMap[keyIndex];
+
+    return (
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '1.25rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', minWidth: '220px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                    <label style={{ fontWeight: 'bold', fontSize: '0.8rem', color: '#0d47a1' }}>
+                        CHAVE GEMINI:
+                    </label>
+                    {Object.keys(exhaustedMap).length > 0 && (
+                        <button
+                            onClick={() => clearAllExhaustedKeys()}
+                            title="Resetar indicador de limite de todas as chaves"
+                            style={{
+                                background: 'none',
+                                border: 'none',
+                                color: '#1976d2',
+                                fontSize: '0.72rem',
+                                textDecoration: 'underline',
+                                cursor: 'pointer',
+                                padding: 0
+                            }}
+                        >
+                            Resetar Limites
+                        </button>
+                    )}
+                </div>
+                <select
+                    value={keyIndex}
+                    onChange={(e) => handleSelectKey(Number(e.target.value))}
+                    style={{
+                        padding: '8px',
+                        borderRadius: '4px',
+                        border: currentKeyExhausted ? '2px solid #d32f2f' : '1px solid #90caf9',
+                        fontSize: '0.9rem',
+                        backgroundColor: currentKeyExhausted ? '#ffebee' : 'white',
+                        color: currentKeyExhausted ? '#c62828' : '#333',
+                        fontWeight: '500',
+                        cursor: 'pointer'
+                    }}
+                >
+                    {GEMINI_KEYS.map((k) => {
+                        const isExhausted = !!exhaustedMap[k.id];
+                        return (
+                            <option key={k.id} value={k.id}>
+                                {isExhausted ? `🔴 ${k.name} (Sem Cota)` : `🟢 ${k.name}`}
+                            </option>
+                        );
+                    })}
+                </select>
+            </div>
+
+            {/* Notificação de Limite */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {notice && notice.message ? (
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        backgroundColor: '#fff3e0',
+                        border: '1px solid #ffe0b2',
+                        borderRadius: '4px',
+                        padding: '6px 10px',
+                        fontSize: '0.8rem',
+                        color: '#e65100',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                    }}>
+                        <span>{notice.message}</span>
+                        <button
+                            onClick={() => clearGeminiNotice()}
+                            title="Fechar notificação"
+                            style={{
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                color: '#e65100',
+                                fontWeight: 'bold',
+                                fontSize: '0.9rem',
+                                padding: '0 2px'
+                            }}
+                        >
+                            ×
+                        </button>
+                    </div>
+                ) : currentKeyExhausted ? (
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        backgroundColor: '#ffebee',
+                        border: '1px solid #ffcdd2',
+                        borderRadius: '4px',
+                        padding: '6px 10px',
+                        fontSize: '0.8rem',
+                        color: '#c62828'
+                    }}>
+                        <span>⚠️ Chave atual sem cota! O sistema mudará automaticamente para a próxima chave na próxima chamada.</span>
+                    </div>
+                ) : (
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        backgroundColor: '#e8f5e9',
+                        border: '1px solid #c8e6c9',
+                        borderRadius: '4px',
+                        padding: '6px 10px',
+                        fontSize: '0.8rem',
+                        color: '#2e7d32'
+                    }}>
+                        <span>🟢 Status da Chave: Ativa / Com limite disponível</span>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
 
 const generateAIContent = async ({ prompt, isJson = false, config }: { prompt: string; isJson?: boolean; config?: any }): Promise<string> => {
-    const provider = localStorage.getItem('ai_provider') || 'ollama';
+    const provider = localStorage.getItem('ai_provider') || 'gemini';
     if (provider === 'ollama') {
         const model = localStorage.getItem('ollama_model') || 'qwen2.5:14b';
         const url = localStorage.getItem('ollama_url') || 'http://localhost:11434';
@@ -146,12 +385,62 @@ const generateAIContent = async ({ prompt, isJson = false, config }: { prompt: s
         const data = await res.json();
         return data.response;
     } else {
-        const response = await ai.models.generateContent({
-            model: "gemini-flash-latest",
-            contents: prompt,
-            config: config || (isJson ? { responseMimeType: "application/json" } : undefined)
-        });
-        return response.text;
+        let attempts = 0;
+        const maxAttempts = GEMINI_KEYS.length;
+        let lastError: any = null;
+
+        while (attempts < maxAttempts) {
+            let keyIndex = getActiveGeminiKeyIndex();
+            const exhaustedMap = getExhaustedKeys();
+
+            // If current key is marked as exhausted, pick next non-exhausted key
+            if (exhaustedMap[keyIndex]) {
+                let foundNext = false;
+                for (let i = 1; i < maxAttempts; i++) {
+                    const candidate = (keyIndex + i) % maxAttempts;
+                    if (!exhaustedMap[candidate]) {
+                        keyIndex = candidate;
+                        foundNext = true;
+                        setActiveGeminiKeyIndex(keyIndex, `Chave anterior sem cota. Alternado automaticamente para ${GEMINI_KEYS[keyIndex].name}.`);
+                        break;
+                    }
+                }
+                if (!foundNext) {
+                    throw new Error(`Todas as 4 chaves API do Gemini atingiram o limite de cota. Por favor, aguarde o reset da cota do Google AI Studio ou reset os limites nas configurações.`);
+                }
+            }
+
+            const currentKeyInfo = GEMINI_KEYS[keyIndex];
+            const ai = new GoogleGenAI({ apiKey: currentKeyInfo.key });
+
+            try {
+                const response = await ai.models.generateContent({
+                    model: "gemini-flash-latest",
+                    contents: prompt,
+                    config: config || (isJson ? { responseMimeType: "application/json" } : undefined)
+                });
+                return response.text;
+            } catch (e: any) {
+                console.error(`Erro com Gemini (${currentKeyInfo.name}):`, e);
+                lastError = e;
+
+                if (isQuotaError(e)) {
+                    setKeyExhausted(keyIndex, true);
+                    attempts++;
+
+                    const nextKeyIndex = (keyIndex + 1) % maxAttempts;
+                    const noticeMsg = `🔴 Cota excedida na ${currentKeyInfo.name}! Trocando automaticamente para ${GEMINI_KEYS[nextKeyIndex].name}...`;
+                    console.warn(noticeMsg);
+                    setActiveGeminiKeyIndex(nextKeyIndex, noticeMsg);
+
+                    await new Promise((r) => setTimeout(r, 500));
+                } else {
+                    throw e;
+                }
+            }
+        }
+
+        throw new Error(`Todas as 4 chaves API do Gemini atingiram o limite de cota. Detalhes: ${lastError?.message || lastError}`);
     }
 };
 
@@ -3851,6 +4140,15 @@ const App = () => {
     const [ollamaModel, setOllamaModel] = useState(() => localStorage.getItem('ollama_model') || 'qwen2.5:14b');
     const [ollamaUrl, setOllamaUrl] = useState(() => localStorage.getItem('ollama_url') || 'http://localhost:11434');
     const [showSettings, setShowSettings] = useState(false);
+    const [geminiKeyIndex, setGeminiKeyIndex] = useState(getActiveGeminiKeyIndex);
+
+    useEffect(() => {
+        const handleKeyChange = () => {
+            setGeminiKeyIndex(getActiveGeminiKeyIndex());
+        };
+        window.addEventListener('gemini_key_state_changed', handleKeyChange);
+        return () => window.removeEventListener('gemini_key_state_changed', handleKeyChange);
+    }, []);
 
     const handleProviderChange = (val) => {
         if (val === 'ollama') {
@@ -3949,7 +4247,7 @@ const App = () => {
                             transition: 'background-color 0.2s'
                         }}
                     >
-                        ⚙️ Provedor: {provider === 'gemini' ? 'Gemini (Nuvem)' : provider === 'supabase' ? 'Supabase (Sem IA)' : `Ollama (${ollamaModel})`}
+                        ⚙️ Provedor: {provider === 'gemini' ? `Gemini (${GEMINI_KEYS[geminiKeyIndex]?.name || 'Nuvem'})` : provider === 'supabase' ? 'Supabase (Sem IA)' : `Ollama (${ollamaModel})`}
                     </button>
                 </div>
             </header>
@@ -3968,6 +4266,7 @@ const App = () => {
                             <option value="supabase">Supabase (Sem IA)</option>
                         </select>
                     </div>
+                    {provider === 'gemini' && <GeminiKeySelector />}
                     {provider === 'ollama' && (
                         <>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', flexGrow: 1, minWidth: '180px' }}>
