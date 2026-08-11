@@ -112,12 +112,12 @@ async function runTranslation() {
     let completedCount = Object.keys(translatedMap).length;
     const totalCount = sourceData.length;
 
-    const TARGET_BOOK = "Salmos";
-    const salmosItems = sourceData.filter(item => item.book === TARGET_BOOK);
-    console.log(`🎯 Focando na tradução dos ${salmosItems.length} capítulos do livro de ${TARGET_BOOK}...`);
+    const TARGET_BOOKS = ["Provérbios", "Eclesiastes"];
+    const targetItems = sourceData.filter(item => TARGET_BOOKS.includes(item.book));
+    console.log(`🎯 Focando na tradução dos ${targetItems.length} capítulos dos livros: ${TARGET_BOOKS.join(', ')}...`);
 
-    for (let i = 0; i < salmosItems.length; i += CONCURRENCY) {
-        const batch = salmosItems.slice(i, i + CONCURRENCY);
+    for (let i = 0; i < targetItems.length; i += CONCURRENCY) {
+        const batch = targetItems.slice(i, i + CONCURRENCY);
 
         await Promise.all(batch.map(async (item) => {
             const key = `${item.book}_${item.chapter}`;
@@ -129,7 +129,7 @@ async function runTranslation() {
             translatedMap[key] = translated;
             completedCount++;
 
-            console.log(`  ✅ Progresso: Salmos ${item.chapter}/150 traduzido`);
+            console.log(`  ✅ Progresso: ${item.book} ${item.chapter} traduzido`);
         }));
 
         // Periodic auto-save every batch
