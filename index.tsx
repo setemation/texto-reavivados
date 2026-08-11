@@ -23,12 +23,15 @@ const parseBold = (text = '') => {
 
 const formatGeminiError = (e: any, defaultMessage: string): string => {
     console.error(e);
-    const msg = e?.message || e?.toString() || '';
+    const msg = typeof e === 'object' ? JSON.stringify(e) : (e?.message || e?.toString() || '');
+    if (msg.includes('leaked') || msg.includes('PERMISSION_DENIED') || msg.includes('403')) {
+        return 'Uma ou mais chaves foram reportadas como bloqueadas/vazadas (Erro 403). O sistema alternou automaticamente para a próxima chave disponível.';
+    }
     if (msg.includes('spending cap') || msg.includes('RESOURCE_EXHAUSTED') || e?.status === 429 || msg.includes('429')) {
-        return 'Limite de cota excedido no Google AI Studio (Erro 429). Acesse https://ai.studio/spend para ajustar seu limite de gastos ou insira uma nova API Key.';
+        return 'Limite de cota excedido nas chaves do Google AI Studio (Erro 429). O sistema alternou automaticamente para a próxima chave disponível.';
     }
     if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('TypeError') || msg.includes('network error')) {
-        return 'Erro de Conexão: Não foi possível conectar ao Ollama local. Certifique-se de que o Ollama está rodando no seu computador e que as permissões CORS foram ativadas (com a variável OLLAMA_ORIGINS="*").';
+        return 'Erro de Conexão: Não foi possível conectar ao servidor de IA ou Ollama local.';
     }
     return `${defaultMessage} (Detalhes: ${msg})`;
 };
@@ -202,17 +205,24 @@ export const notifyGeminiKeyStateChange = () => {
 
 export const isQuotaError = (e: any): boolean => {
     if (!e) return false;
-    const msg = (e?.message || e?.toString() || '').toLowerCase();
-    const status = e?.status;
+    const msg = (e?.message || e?.toString() || (typeof e === 'object' ? JSON.stringify(e) : '')).toLowerCase();
+    const status = e?.status || e?.code || e?.error?.code;
     return (
         status === 429 ||
+        status === 403 ||
         msg.includes('429') ||
+        msg.includes('403') ||
         msg.includes('resource_exhausted') ||
         msg.includes('spending cap') ||
         msg.includes('quota') ||
         msg.includes('limit') ||
         msg.includes('rate limit') ||
-        msg.includes('too many requests')
+        msg.includes('too many requests') ||
+        msg.includes('permission_denied') ||
+        msg.includes('leaked') ||
+        msg.includes('api_key_invalid') ||
+        msg.includes('invalid api key') ||
+        msg.includes('key was reported')
     );
 };
 
