@@ -4012,7 +4012,7 @@ const App = () => {
                 <div className="sidebar-right" style={{ 
                     position: 'relative', 
                     padding: isRightSidebarCollapsed ? '0' : '0.75rem',
-                    overflow: isRightSidebarCollapsed ? 'visible' : 'hidden',
+                    overflow: 'visible',
                     transition: 'all 0.3s ease'
                 }}>
                     <div style={{
@@ -4043,13 +4043,13 @@ const App = () => {
                                         justifyContent: 'center',
                                         padding: 0,
                                         color: '#0d47a1',
-                                        fontSize: '1rem',
-                                        fontWeight: 'bold',
                                         transition: 'all 0.2s ease'
                                     }}
                                     title="Recolher painel para a direita"
                                 >
-                                    ▶
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M8 5v14l11-7z" />
+                                    </svg>
                                 </button>
 
                                 <button
@@ -4064,17 +4064,16 @@ const App = () => {
                                         cursor: 'pointer',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        justifyContent: 'flex-end',
-                                        paddingRight: '3px',
-                                        paddingLeft: 0,
+                                        justifyContent: 'center',
+                                        padding: 0,
                                         color: '#0d47a1',
-                                        fontSize: '0.9rem',
-                                        fontWeight: 'bold',
                                         transition: 'all 0.2s ease'
                                     }}
                                     title="Expandir painel sobre o bloco central"
                                 >
-                                    ◀
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M16 19V5l-11 7z" />
+                                    </svg>
                                 </button>
                             </>
                         ) : (
@@ -4090,17 +4089,22 @@ const App = () => {
                                     cursor: 'pointer',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    justifyContent: rightSidebarMode === 'collapsed-right' ? 'flex-end' : 'center',
-                                    paddingRight: rightSidebarMode === 'collapsed-right' ? '3px' : 0,
-                                    paddingLeft: 0,
+                                    justifyContent: 'center',
+                                    padding: 0,
                                     color: '#0d47a1',
-                                    fontSize: '1rem',
-                                    fontWeight: 'bold',
                                     transition: 'all 0.2s ease'
                                 }}
                                 title="Retornar ao tamanho original"
                             >
-                                {rightSidebarMode === 'collapsed-right' ? '◀' : '▶'}
+                                {rightSidebarMode === 'collapsed-right' ? (
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M16 19V5l-11 7z" />
+                                    </svg>
+                                ) : (
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M8 5v14l11-7z" />
+                                    </svg>
+                                )}
                             </button>
                         )}
                     </div>
