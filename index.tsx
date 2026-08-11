@@ -4319,10 +4319,12 @@ const App = () => {
     const [ollamaUrl, setOllamaUrl] = useState(() => localStorage.getItem('ollama_url') || 'http://localhost:11434');
     const [showSettings, setShowSettings] = useState(false);
     const [geminiKeyIndex, setGeminiKeyIndex] = useState(getActiveGeminiKeyIndex);
+    const [exhaustedKeys, setExhaustedKeys] = useState(getExhaustedKeys);
 
     useEffect(() => {
         const handleKeyChange = () => {
             setGeminiKeyIndex(getActiveGeminiKeyIndex());
+            setExhaustedKeys(getExhaustedKeys());
         };
         window.addEventListener('gemini_key_state_changed', handleKeyChange);
         return () => window.removeEventListener('gemini_key_state_changed', handleKeyChange);
@@ -4403,7 +4405,17 @@ const App = () => {
                             transition: 'background-color 0.2s'
                         }}
                     >
-                        ⚙️ Provedor: {provider === 'gemini' ? `Gemini (${GEMINI_KEYS[geminiKeyIndex]?.name || 'Nuvem'})` : provider === 'supabase' ? 'Supabase (Sem IA)' : `Ollama (${ollamaModel})`}
+                        ⚙️ Provedor: {
+                            provider === 'gemini' ? (
+                                <span>
+                                    Gemini <span style={{ color: exhaustedKeys[geminiKeyIndex] ? '#d32f2f' : '#0d47a1', fontWeight: 'bold' }}>{geminiKeyIndex + 1}</span>
+                                </span>
+                            ) : provider === 'supabase' ? (
+                                'Supabase (Sem IA)'
+                            ) : (
+                                `Ollama (${ollamaModel})`
+                            )
+                        }
                     </button>
                 </div>
             </header>
