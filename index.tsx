@@ -3605,8 +3605,9 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '1rem', position: 'relative' }}>
             
             <div className="reading-box" style={{ 
-                flex: expandedBlock === 'reading' ? '1 1 100%' : '1 1 35%', 
-                minHeight: '15vh', 
+                flex: expandedBlock === 'reading' ? '1 1 100%' : '0 0 auto', 
+                maxHeight: expandedBlock === 'reading' ? '100%' : '38vh',
+                minHeight: '100px', 
                 overflowY: 'auto',
                 position: expandedBlock === 'reading' ? 'absolute' : 'relative',
                 top: expandedBlock === 'reading' ? 0 : 'auto',
@@ -3684,15 +3685,18 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
             </div>
             
             <div className="analysis-box" style={{ 
-                flex: expandedBlock === 'analysis' ? '1 1 100%' : '1 1 65%', 
-                height: 'auto',
+                flex: expandedBlock === 'analysis' ? '1 1 100%' : '1 1 0px', 
+                minHeight: 0,
                 position: expandedBlock === 'analysis' ? 'absolute' : 'relative',
                 top: expandedBlock === 'analysis' ? 0 : 'auto',
                 left: expandedBlock === 'analysis' ? 0 : 'auto',
                 right: expandedBlock === 'analysis' ? 0 : 'auto',
                 bottom: expandedBlock === 'analysis' ? 0 : 'auto',
                 zIndex: expandedBlock === 'analysis' ? 10 : 1,
-                opacity: expandedBlock === 'reading' ? 0.3 : 1
+                opacity: expandedBlock === 'reading' ? 0.3 : 1,
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden'
             }}>
                 <div className="analysis-tabs" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex' }}>
