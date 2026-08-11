@@ -4040,11 +4040,12 @@ const App = () => {
                                         cursor: 'pointer',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        justifyContent: 'center',
+                                        justifyContent: 'flex-start',
+                                        paddingLeft: '4px',
+                                        paddingRight: 0,
                                         color: '#0d47a1',
                                         fontSize: '0.9rem',
                                         fontWeight: 'bold',
-                                        padding: 0,
                                         transition: 'all 0.2s ease'
                                     }}
                                     title="Recolher painel para a direita"
@@ -4064,11 +4065,12 @@ const App = () => {
                                         cursor: 'pointer',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        justifyContent: 'center',
+                                        justifyContent: 'flex-end',
+                                        paddingRight: '4px',
+                                        paddingLeft: 0,
                                         color: '#0d47a1',
                                         fontSize: '0.9rem',
                                         fontWeight: 'bold',
-                                        padding: 0,
                                         transition: 'all 0.2s ease'
                                     }}
                                     title="Expandir painel sobre o bloco central"
