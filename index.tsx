@@ -4041,10 +4041,10 @@ const App = () => {
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'flex-start',
-                                        paddingLeft: '4px',
+                                        paddingLeft: '3px',
                                         paddingRight: 0,
                                         color: '#0d47a1',
-                                        fontSize: '0.9rem',
+                                        fontSize: '0.85rem',
                                         fontWeight: 'bold',
                                         transition: 'all 0.2s ease'
                                     }}
@@ -4065,11 +4065,11 @@ const App = () => {
                                         cursor: 'pointer',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        justifyContent: 'flex-end',
-                                        paddingRight: '4px',
-                                        paddingLeft: 0,
+                                        justifyContent: 'flex-start',
+                                        paddingLeft: '3px',
+                                        paddingRight: 0,
                                         color: '#0d47a1',
-                                        fontSize: '0.9rem',
+                                        fontSize: '0.85rem',
                                         fontWeight: 'bold',
                                         transition: 'all 0.2s ease'
                                     }}
@@ -4091,11 +4091,11 @@ const App = () => {
                                     cursor: 'pointer',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    justifyContent: 'center',
+                                    justifyContent: 'flex-start',
+                                    paddingLeft: '3px',
                                     color: '#0d47a1',
-                                    fontSize: '1rem',
+                                    fontSize: '0.85rem',
                                     fontWeight: 'bold',
-                                    padding: 0,
                                     transition: 'all 0.2s ease'
                                 }}
                                 title="Retornar ao tamanho original"
