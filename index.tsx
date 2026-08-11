@@ -141,7 +141,7 @@ const decodeKey = (encoded: string): string => {
 };
 
 export const GEMINI_KEYS: GeminiKeyInfo[] = [
-    { id: 0, name: 'Chave 1 (Reavivados)', key: decodeKey('QUl6YVN5RG1Ydl9hekhzNVQ1VlZ2NWRSdTY4MDFoaVdyOUNCdmlF') },
+    { id: 0, name: 'Chave 1 (Reavivados)', key: decodeKey('AIzaSyD5CumyyEW7S9X2LFYHoygsVPL_poZLoiM') },
     { id: 1, name: 'Chave 2 (IASD Marco)', key: decodeKey('QVEuQWI4Uk42TGRoeGxRVEwycnhWZTR5dUxfc3Q2blAtTXZINEdtYTlDY2FHRi0wUDVMb1E=') },
     { id: 2, name: 'Chave 3 (Pessoal)', key: decodeKey('QUl6YVN5Q2J6NW5rUmpDTVJBcjVmWnREc3plNkxxSU9tdGxhY3gw') },
     { id: 3, name: 'Chave 4 (Jozy)', key: decodeKey('QVEuQWI4Uk42S1VxWDFrM1NqdVF2X3B3OS1idEtnOGxjb1RfUU5PR2lZWndnd1VEY1U1LXc=') },
@@ -4534,9 +4534,9 @@ const App = () => {
                 }}>
                     <div style={{
                         position: 'fixed',
-                        left: isRightSidebarCollapsed ? '50%' : 'calc(100vw - 532px - 15px)',
+                        left: isRightSidebarCollapsed ? 'calc(100vw - 16px)' : 'calc(100vw - 532px - 15px)',
                         top: '50vh',
-                        transform: isRightSidebarCollapsed ? 'translate(-50%, -50%)' : 'translateY(-50%)',
+                        transform: 'translate(-50%, -50%)',
                         zIndex: 50,
                         display: 'flex',
                         flexDirection: 'column',
