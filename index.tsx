@@ -4040,11 +4040,10 @@ const App = () => {
                                         cursor: 'pointer',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        justifyContent: 'flex-start',
-                                        paddingLeft: '3px',
-                                        paddingRight: 0,
+                                        justifyContent: 'center',
+                                        padding: 0,
                                         color: '#0d47a1',
-                                        fontSize: '0.85rem',
+                                        fontSize: '1rem',
                                         fontWeight: 'bold',
                                         transition: 'all 0.2s ease'
                                     }}
@@ -4065,11 +4064,11 @@ const App = () => {
                                         cursor: 'pointer',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        justifyContent: 'flex-start',
-                                        paddingLeft: '3px',
-                                        paddingRight: 0,
+                                        justifyContent: 'flex-end',
+                                        paddingRight: '3px',
+                                        paddingLeft: 0,
                                         color: '#0d47a1',
-                                        fontSize: '0.85rem',
+                                        fontSize: '0.9rem',
                                         fontWeight: 'bold',
                                         transition: 'all 0.2s ease'
                                     }}
@@ -4091,10 +4090,11 @@ const App = () => {
                                     cursor: 'pointer',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    justifyContent: 'flex-start',
-                                    paddingLeft: '3px',
+                                    justifyContent: rightSidebarMode === 'collapsed-right' ? 'flex-end' : 'center',
+                                    paddingRight: rightSidebarMode === 'collapsed-right' ? '3px' : 0,
+                                    paddingLeft: 0,
                                     color: '#0d47a1',
-                                    fontSize: '0.85rem',
+                                    fontSize: '1rem',
                                     fontWeight: 'bold',
                                     transition: 'all 0.2s ease'
                                 }}
