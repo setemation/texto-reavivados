@@ -4386,28 +4386,6 @@ const App = () => {
                     </h2>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                    <a
-                        href={typeof window !== 'undefined' ? `http://${window.location.hostname || 'localhost'}:3001` : 'http://localhost:3001'}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                            backgroundColor: '#e3f2fd',
-                            border: '1px solid #90caf9',
-                            color: '#0d47a1',
-                            padding: '6px 12px',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '0.85rem',
-                            fontWeight: 'bold',
-                            display: 'flex',
-                            alignItems: 'center',
-                            textDecoration: 'none',
-                            gap: '6px',
-                            transition: 'background-color 0.2s'
-                        }}
-                    >
-                        🌐 Abrir Tradutor
-                    </a>
                     <button
                         onClick={() => setShowSettings(!showSettings)}
                         style={{
