@@ -2819,7 +2819,79 @@ const ALL_BOOKS = Object.values(NAA_BOOKS).flat();
 const LeftSidebar = ({ selectedBook, setSelectedBook, selectedChapter, setSelectedChapter, selectedVerse, setSelectedVerse }) => {
     const allBooks: any[] = Object.values(BIBLIA_STRUCTURE).flatMap((t: any) => t.col1.concat(t.col2 || []).filter(Boolean));
     const [searchTerm, setSearchTerm] = useState('');
-    const filteredBooks = searchTerm ? allBooks.filter(b => b.name.toLowerCase().includes(searchTerm.toLowerCase())) : allBooks;
+
+    const parseBibleReference = useCallback((input: string) => {
+        if (!input || !input.trim()) return null;
+        const trimmed = input.trim();
+        
+        // Match format: [Book Name/Abbr] [Chapter] [Separator] [Verse]
+        // Examples: "Salmo 1:1", "Salmo 1 1", "Salmo 1.1", "1 João 3:16", "1Jo 3.16", "Gen 1"
+        const match = trimmed.match(/^((?:\d\s*)?[a-zA-ZÀ-ÿ\s]+?)\s*(\d+)?(?:[\s:.]+(\d+))?\s*$/);
+        if (!match) return null;
+
+        const rawBookStr = match[1]?.trim();
+        const chapterStr = match[2];
+        const verseStr = match[3];
+
+        if (!rawBookStr) return null;
+
+        const normalizeText = (str: string) => 
+            str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "");
+
+        const normBookStr = normalizeText(rawBookStr);
+
+        // 1. Try exact or map match
+        let matchedBook = allBooks.find(b => {
+            const normName = normalizeText(b.name);
+            const normMap = b.map ? normalizeText(b.map) : '';
+            return normName === normBookStr || normMap === normBookStr;
+        });
+
+        // 2. Try prefix / singular-plural match
+        if (!matchedBook) {
+            matchedBook = allBooks.find(b => {
+                const normName = normalizeText(b.name);
+                const normMap = b.map ? normalizeText(b.map) : '';
+                return normName.startsWith(normBookStr) || normBookStr.startsWith(normName) ||
+                       (normMap && (normMap.startsWith(normBookStr) || normBookStr.startsWith(normMap)));
+            });
+        }
+
+        if (!matchedBook) return null;
+
+        let chapter = chapterStr ? parseInt(chapterStr, 10) : null;
+        if (chapter !== null && (isNaN(chapter) || chapter < 1 || chapter > matchedBook.chapters)) {
+            chapter = null;
+        }
+
+        let verse = verseStr ? parseInt(verseStr, 10) : null;
+        if (chapter !== null && verse !== null) {
+            const maxVerses = matchedBook.verses ? matchedBook.verses[chapter - 1] : 200;
+            if (isNaN(verse) || verse < 1 || verse > maxVerses) {
+                verse = null;
+            }
+        } else {
+            verse = null;
+        }
+
+        return { book: matchedBook, chapter, verse };
+    }, [allBooks]);
+
+    const handleExecuteSearch = useCallback(() => {
+        const parsed = parseBibleReference(searchTerm);
+        if (parsed && parsed.book) {
+            setSelectedBook(parsed.book);
+            setSelectedChapter(parsed.chapter);
+            setSelectedVerse(parsed.verse);
+        }
+    }, [searchTerm, parseBibleReference, setSelectedBook, setSelectedChapter, setSelectedVerse]);
+
+    const bookSearchQuery = searchTerm.replace(/[\d:.\s]+$/, '').trim();
+    const filteredBooks = bookSearchQuery ? allBooks.filter(b => {
+        const normName = b.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const normQuery = bookSearchQuery.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        return normName.includes(normQuery);
+    }) : allBooks;
 
     const handleSelectBook = (book) => {
         setSelectedBook(book);
@@ -2830,13 +2902,31 @@ const LeftSidebar = ({ selectedBook, setSelectedBook, selectedChapter, setSelect
     return (
         <>
             <div style={{ padding: '0.2rem' }}>
-                <input 
-                    type="text" 
-                    placeholder="Busca ex: Gen 1" 
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    style={{ marginBottom: '0.5rem', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc', width: '100%' }}
-                />
+                <div style={{ position: 'relative', width: '100%', marginBottom: '0.5rem' }}>
+                    <input 
+                        type="text" 
+                        placeholder="Busca ex: Salmo 1:1, Salmo 1.1, Gn 1" 
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleExecuteSearch();
+                            }
+                        }}
+                        style={{ width: '100%', padding: '0.5rem 36px 0.5rem 0.75rem', borderRadius: '4px', border: '1px solid #ccc', fontSize: '0.85rem' }}
+                    />
+                    <span
+                        onClick={handleExecuteSearch}
+                        title="Buscar referência"
+                        style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', userSelect: 'none', color: '#616161' }}
+                    >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'block' }}>
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                    </span>
+                </div>
             </div>
             <div className="selection-box">
                 <h3>LIVRO</h3>
@@ -3724,12 +3814,12 @@ const RightSidebar = ({ selectedBook, selectedChapter, selectedVerse }) => {
     const [activeTab, setActiveTab] = useState('Pensamentos');
     
     return (
-        <div className="selection-box" style={{ height: '100%', padding: 0, overflow: 'hidden' }}>
+        <div className="selection-box" style={{ height: '100%', padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <div className="analysis-tabs">
                 <div style={{ flex: 1, textAlign: 'center' }} className={`analysis-tab ${activeTab === 'Pensamentos' ? 'active' : ''}`} onClick={() => setActiveTab('Pensamentos')}>Pensamentos</div>
                 <div style={{ flex: 1, textAlign: 'center' }} className={`analysis-tab ${activeTab === 'Ilustrações' ? 'active' : ''}`} onClick={() => setActiveTab('Ilustrações')}>Ilustrações</div>
             </div>
-            <div style={{ padding: '0', height: '100%', overflowY: 'auto' }} className="embedded-view">
+            <div style={{ padding: '0', flex: 1, minHeight: 0, overflowY: 'auto' }} className="embedded-view">
                 {activeTab === 'Pensamentos' && <PensamentosView />}
                 {activeTab === 'Ilustrações' && <IlustracoesView />}
             </div>
@@ -3782,19 +3872,33 @@ const App = () => {
         localStorage.setItem('ollama_url', val);
     };
 
-    const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState(() => {
-        return localStorage.getItem('rightSidebarCollapsed') === 'true';
+    const [rightSidebarMode, setRightSidebarMode] = useState<'normal' | 'collapsed-right' | 'expanded-left'>(() => {
+        const saved = localStorage.getItem('rightSidebarMode');
+        if (saved === 'normal' || saved === 'collapsed-right' || saved === 'expanded-left') {
+            return saved as 'normal' | 'collapsed-right' | 'expanded-left';
+        }
+        if (localStorage.getItem('rightSidebarCollapsed') === 'true') {
+            return 'collapsed-right';
+        }
+        return 'normal';
     });
 
     useEffect(() => {
-        localStorage.setItem('rightSidebarCollapsed', String(isRightSidebarCollapsed));
-    }, [isRightSidebarCollapsed]);
+        localStorage.setItem('rightSidebarMode', rightSidebarMode);
+        localStorage.setItem('rightSidebarCollapsed', String(rightSidebarMode === 'collapsed-right'));
+    }, [rightSidebarMode]);
+
+    const isRightSidebarCollapsed = rightSidebarMode === 'collapsed-right';
 
     return (
         <div className="app-container">
             
             <header style={{ 
-                gridTemplateColumns: isRightSidebarCollapsed ? '260px 1fr auto' : '260px 1fr 532px',
+                gridTemplateColumns: rightSidebarMode === 'collapsed-right' 
+                    ? '260px 1fr auto' 
+                    : rightSidebarMode === 'expanded-left' 
+                        ? '260px 1fr auto' 
+                        : '260px 1fr 532px',
                 transition: 'grid-template-columns 0.3s ease'
             }}>
                 <div>
@@ -3880,7 +3984,11 @@ const App = () => {
             )}
 
             <main style={{ 
-                gridTemplateColumns: isRightSidebarCollapsed ? '260px 1fr 32px' : '260px 1fr 532px',
+                gridTemplateColumns: rightSidebarMode === 'collapsed-right' 
+                    ? '260px 1fr 32px' 
+                    : rightSidebarMode === 'expanded-left' 
+                        ? '260px 1fr' 
+                        : '260px 1fr 532px',
                 transition: 'grid-template-columns 0.3s ease'
             }}>
                 <div className="sidebar-left">
@@ -3891,13 +3999,15 @@ const App = () => {
                     />
                 </div>
                 
-                <div className="center-content">
-                    <CenterContent 
-                        selectedBook={selectedBook}
-                        selectedChapter={selectedChapter}
-                        selectedVerse={selectedVerse}
-                    />
-                </div>
+                {rightSidebarMode !== 'expanded-left' && (
+                    <div className="center-content">
+                        <CenterContent 
+                            selectedBook={selectedBook}
+                            selectedChapter={selectedChapter}
+                            selectedVerse={selectedVerse}
+                        />
+                    </div>
+                )}
                 
                 <div className="sidebar-right" style={{ 
                     position: 'relative', 
@@ -3905,34 +4015,93 @@ const App = () => {
                     overflow: isRightSidebarCollapsed ? 'visible' : 'hidden',
                     transition: 'all 0.3s ease'
                 }}>
-                    <button
-                        onClick={() => setIsRightSidebarCollapsed(!isRightSidebarCollapsed)}
-                        style={{
-                            position: 'absolute',
-                            left: isRightSidebarCollapsed ? '50%' : '-15px',
-                            top: '50%',
-                            transform: isRightSidebarCollapsed ? 'translate(-50%, -50%)' : 'translateY(-50%)',
-                            zIndex: 50,
-                            width: '28px',
-                            height: '48px',
-                            backgroundColor: '#ffffff',
-                            border: '1px solid #c0d1e5',
-                            borderRadius: isRightSidebarCollapsed ? '6px' : '6px 0 0 6px',
-                            boxShadow: '-2px 0 6px rgba(0, 0, 0, 0.12)',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: '#0d47a1',
-                            fontSize: '1rem',
-                            fontWeight: 'bold',
-                            padding: 0,
-                            transition: 'all 0.2s ease'
-                        }}
-                        title={isRightSidebarCollapsed ? "Expandir painel direito" : "Recolher painel direito"}
-                    >
-                        {isRightSidebarCollapsed ? '◀' : '▶'}
-                    </button>
+                    <div style={{
+                        position: 'absolute',
+                        left: isRightSidebarCollapsed ? '50%' : '-15px',
+                        top: '50%',
+                        transform: isRightSidebarCollapsed ? 'translate(-50%, -50%)' : 'translateY(-50%)',
+                        zIndex: 50,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '6px',
+                        alignItems: 'center'
+                    }}>
+                        {rightSidebarMode === 'normal' ? (
+                            <>
+                                <button
+                                    onClick={() => setRightSidebarMode('collapsed-right')}
+                                    style={{
+                                        width: '28px',
+                                        height: '42px',
+                                        backgroundColor: '#ffffff',
+                                        border: '1px solid #c0d1e5',
+                                        borderRadius: '6px 0 0 6px',
+                                        boxShadow: '-2px 0 6px rgba(0, 0, 0, 0.12)',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        color: '#0d47a1',
+                                        fontSize: '0.9rem',
+                                        fontWeight: 'bold',
+                                        padding: 0,
+                                        transition: 'all 0.2s ease'
+                                    }}
+                                    title="Recolher painel para a direita"
+                                >
+                                    ▶
+                                </button>
+
+                                <button
+                                    onClick={() => setRightSidebarMode('expanded-left')}
+                                    style={{
+                                        width: '28px',
+                                        height: '42px',
+                                        backgroundColor: '#ffffff',
+                                        border: '1px solid #c0d1e5',
+                                        borderRadius: '6px 0 0 6px',
+                                        boxShadow: '-2px 0 6px rgba(0, 0, 0, 0.12)',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        color: '#0d47a1',
+                                        fontSize: '0.9rem',
+                                        fontWeight: 'bold',
+                                        padding: 0,
+                                        transition: 'all 0.2s ease'
+                                    }}
+                                    title="Expandir painel sobre o bloco central"
+                                >
+                                    ◀
+                                </button>
+                            </>
+                        ) : (
+                            <button
+                                onClick={() => setRightSidebarMode('normal')}
+                                style={{
+                                    width: '28px',
+                                    height: '48px',
+                                    backgroundColor: '#ffffff',
+                                    border: '1px solid #c0d1e5',
+                                    borderRadius: isRightSidebarCollapsed ? '6px' : '6px 0 0 6px',
+                                    boxShadow: '-2px 0 6px rgba(0, 0, 0, 0.12)',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: '#0d47a1',
+                                    fontSize: '1rem',
+                                    fontWeight: 'bold',
+                                    padding: 0,
+                                    transition: 'all 0.2s ease'
+                                }}
+                                title="Retornar ao tamanho original"
+                            >
+                                {rightSidebarMode === 'collapsed-right' ? '◀' : '▶'}
+                            </button>
+                        )}
+                    </div>
 
                     {!isRightSidebarCollapsed && (
                         <RightSidebar 
