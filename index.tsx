@@ -4099,6 +4099,182 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
     );
 };
 
+const TradutorView = () => {
+    const [sourceText, setSourceText] = useState('');
+    const [translatedText, setTranslatedText] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [copied, setCopied] = useState(false);
+
+    const handleTranslate = async () => {
+        if (!sourceText.trim() || loading) return;
+        setLoading(true);
+        setError('');
+        try {
+            const prompt = `Traduza o seguinte texto do inglês para o português do Brasil com alta precisão, fluência e naturalidade. Retorne APENAS o texto traduzido final, sem explicações adicionais, rótulos ou aspas:\n\n${sourceText}`;
+            const response = await generateAIContent({ prompt });
+            setTranslatedText(response.trim());
+        } catch (e: any) {
+            setError(formatGeminiError(e, 'Falha ao traduzir o texto.'));
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleTranslate();
+        }
+    };
+
+    const handleCopy = () => {
+        if (!translatedText) return;
+        navigator.clipboard.writeText(translatedText);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
+    const handleClear = () => {
+        setSourceText('');
+        setTranslatedText('');
+        setError('');
+    };
+
+    return (
+        <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem', height: '100%', boxSizing: 'border-box' }}>
+            {/* Direction Badge */}
+            <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justify: 'space-between',
+                backgroundColor: '#e3f2fd',
+                border: '1px solid #90caf9',
+                borderRadius: '6px',
+                padding: '8px 14px',
+                fontWeight: 'bold',
+                fontSize: '0.85rem',
+                color: '#0d47a1',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+            }}>
+                <span>🇺🇸 Inglês</span>
+                <span style={{ fontSize: '1.1rem', color: '#1976d2' }}>➔</span>
+                <span>🇧🇷 Português (BR)</span>
+            </div>
+
+            {/* Input Area */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#616161' }}>
+                        TEXTO EM INGLÊS:
+                    </label>
+                    {sourceText && (
+                        <button
+                            onClick={handleClear}
+                            style={{ background: 'none', border: 'none', color: '#757575', cursor: 'pointer', fontSize: '0.75rem', textDecoration: 'underline' }}
+                        >
+                            Limpar
+                        </button>
+                    )}
+                </div>
+                <textarea
+                    value={sourceText}
+                    onChange={(e) => setSourceText(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Digite ou cole o texto em inglês... (Pressione ENTER para traduzir)"
+                    rows={5}
+                    style={{
+                        width: '100%',
+                        padding: '10px',
+                        borderRadius: '6px',
+                        border: '1px solid #cccccc',
+                        fontSize: '0.9rem',
+                        fontFamily: 'inherit',
+                        resize: 'vertical',
+                        outline: 'none',
+                        boxSizing: 'border-box'
+                    }}
+                />
+                <span style={{ fontSize: '0.72rem', color: '#757575', textAlign: 'right' }}>
+                    Pressione <strong>Enter</strong> para traduzir (Shift + Enter para nova linha)
+                </span>
+            </div>
+
+            {/* Action Button */}
+            <button
+                onClick={handleTranslate}
+                disabled={loading || !sourceText.trim()}
+                style={{
+                    backgroundColor: loading || !sourceText.trim() ? '#b0bec5' : '#0d47a1',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    padding: '10px 16px',
+                    fontSize: '0.9rem',
+                    fontWeight: 'bold',
+                    cursor: loading || !sourceText.trim() ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justify: 'center',
+                    gap: '8px',
+                    transition: 'background-color 0.2s',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                }}
+            >
+                {loading ? (
+                    <>⏳ Traduzindo...</>
+                ) : (
+                    <>🌐 Traduzir (ENTER)</>
+                )}
+            </button>
+
+            {/* Error Message */}
+            {error && <div className="error-message" style={{ margin: 0, padding: '8px', fontSize: '0.85rem' }}>{error}</div>}
+
+            {/* Output Area */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flexGrow: 1 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#0d47a1' }}>
+                        TRADUÇÃO (PORTUGUÊS BR):
+                    </label>
+                    {translatedText && (
+                        <button
+                            onClick={handleCopy}
+                            style={{
+                                backgroundColor: copied ? '#4caf50' : '#e3f2fd',
+                                color: copied ? 'white' : '#0d47a1',
+                                border: '1px solid #90caf9',
+                                borderRadius: '4px',
+                                padding: '2px 8px',
+                                fontSize: '0.75rem',
+                                fontWeight: 'bold',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            {copied ? '✓ Copiado!' : '📋 Copiar'}
+                        </button>
+                    )}
+                </div>
+                <div style={{
+                    minHeight: '120px',
+                    backgroundColor: '#f8f9fa',
+                    border: '1px solid #e0e0e0',
+                    borderRadius: '6px',
+                    padding: '10px',
+                    fontSize: '0.9rem',
+                    lineHeight: '1.5',
+                    color: translatedText ? '#212121' : '#9e9e9e',
+                    whiteSpace: 'pre-wrap',
+                    overflowY: 'auto'
+                }}>
+                    {translatedText || (loading ? 'Processando tradução...' : 'A tradução aparecerá aqui...')}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const RightSidebar = ({ selectedBook, selectedChapter, selectedVerse }) => {
     const [activeTab, setActiveTab] = useState('Pensamentos');
     
@@ -4107,10 +4283,12 @@ const RightSidebar = ({ selectedBook, selectedChapter, selectedVerse }) => {
             <div className="analysis-tabs">
                 <div style={{ flex: 1, textAlign: 'center' }} className={`analysis-tab ${activeTab === 'Pensamentos' ? 'active' : ''}`} onClick={() => setActiveTab('Pensamentos')}>Pensamentos</div>
                 <div style={{ flex: 1, textAlign: 'center' }} className={`analysis-tab ${activeTab === 'Ilustrações' ? 'active' : ''}`} onClick={() => setActiveTab('Ilustrações')}>Ilustrações</div>
+                <div style={{ flex: 1, textAlign: 'center' }} className={`analysis-tab ${activeTab === 'Tradutor' ? 'active' : ''}`} onClick={() => setActiveTab('Tradutor')}>Tradutor</div>
             </div>
             <div style={{ padding: '0', flex: 1, minHeight: 0, overflowY: 'auto' }} className="embedded-view">
                 {activeTab === 'Pensamentos' && <PensamentosView />}
                 {activeTab === 'Ilustrações' && <IlustracoesView />}
+                {activeTab === 'Tradutor' && <TradutorView />}
             </div>
         </div>
     );
