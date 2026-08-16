@@ -2995,8 +2995,6 @@ ${existingQuotes}Responda em JSON com um array de objetos, onde cada objeto poss
             {error && <ErrorMessage message={error} />}
             {quotes.map(q => {
                 const subAction = subActionState[q.id] || {};
-                const cleanQuoteForSearch = (q.quote || '').replace(/["'“”]/g, '').slice(0, 80);
-                const googleSearchUrl = `https://www.google.com/search?q=${encodeURIComponent(`"${cleanQuoteForSearch}" ${q.source || ''}`)}`;
                 
                 return (
                     <div className="card quote-card" key={q.id}>
@@ -3005,31 +3003,13 @@ ${existingQuotes}Responda em JSON com um array de objetos, onde cada objeto poss
                             — <strong>{q.source}</strong>
                             {q.work ? <span style={{ fontStyle: 'italic', color: '#555', marginLeft: '6px' }}>({q.work})</span> : ''}
                         </footer>
-                        <div className="quote-actions" style={{ flexWrap: 'wrap', gap: '8px' }}>
-                            <a 
-                                href={googleSearchUrl} 
-                                target="_blank" 
-                                rel="noopener noreferrer" 
-                                style={{
-                                    fontSize: '0.8rem',
-                                    backgroundColor: '#e3f2fd',
-                                    color: '#0d47a1',
-                                    padding: '4px 10px',
-                                    borderRadius: '4px',
-                                    border: '1px solid #90caf9',
-                                    textDecoration: 'none',
-                                    fontWeight: 'bold',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '4px'
-                                }}
-                                title="Verificar citação e livro original no Google"
-                            >
-                                🔍 Checar no Google
-                            </a>
-                            <button onClick={() => runSubAction(q.id, `Faça uma auditoria crítica de autenticidade para a seguinte citação atribuída a ${q.source} (Obra: ${q.work || 'Não informada'}):\n"${q.quote}"\n\nResponda estruturado:\n1. Status: [100% Autêntica e Literal / Paráfrase / Apócrifa / Falsamente atribuída]\n2. Publicação Original: [Livro, capítulo, sermão ou documento exato onde foi impressa]\n3. Veredito: [Explicação curta se a frase é genuína palavra por palavra ou se sofreu adulteração].`, 'verify')}>Verificar com IA</button>
-                            <button onClick={() => runSubAction(q.id, `Apresente uma biografia concisa do autor (${q.source}) e a importância histórica da obra "${q.work || 'principal obra'}" no contexto da citação: "${q.quote}".`, 'about')}>Sobre o Autor</button>
-                            <button onClick={() => window.dispatchEvent(new CustomEvent('search-illustrations', { detail: q.quote }))}>🖼️ Ilustrações</button>
+                        <div className="quote-actions" style={{ justifyContent: 'flex-start', marginTop: '10px', gap: '15px' }}>
+                            <button onClick={() => runSubAction(q.id, `Faça uma auditoria crítica de autenticidade para a seguinte citação atribuída a ${q.source} (Obra: ${q.work || 'Não informada'}):\n"${q.quote}"\n\nResponda estruturado:\n1. Status: [100% Autêntica e Literal / Paráfrase / Apócrifa / Falsamente atribuída]\n2. Publicação Original: [Livro, capítulo, sermão ou documento exato onde foi impressa]\n3. Veredito: [Explicação curta se a frase é genuína palavra por palavra ou se sofreu adulteração].`, 'verify')} disabled={subAction.loading} style={{ backgroundColor: 'transparent', border: 'none', color: '#0d47a1', cursor: 'pointer', padding: 0, fontWeight: 'bold' }}>
+                                {subAction.loading ? 'Verificando...' : 'Verificar'}
+                            </button>
+                            <button onClick={() => runSubAction(q.id, `Apresente uma biografia concisa do autor (${q.source}) e a importância histórica da obra "${q.work || 'principal obra'}" no contexto da citação: "${q.quote}".`, 'about')} disabled={subAction.loading} style={{ backgroundColor: 'transparent', border: 'none', color: '#0d47a1', cursor: 'pointer', padding: 0, fontWeight: 'bold' }}>
+                                Sobre o autor
+                            </button>
                         </div>
                         {subAction.loading && <LoadingSpinner />}
                         {subAction.verify && <div className="sub-result"><strong>Auditoria de Autenticidade:</strong> {subAction.verify}</div>}
@@ -3037,7 +3017,13 @@ ${existingQuotes}Responda em JSON com um array de objetos, onde cada objeto poss
                     </div>
                 );
             })}
-            {quotes.length > 0 && <div className="more-buttons"><button onClick={() => handleSearch(true)} disabled={loading}>{loading ? 'Buscando...' : 'Mais Pensamentos'}</button></div>}
+            {quotes.length > 0 && (
+                <div className="more-buttons" style={{ display: 'flex', justifyContent: 'center', margin: '20px 0' }}>
+                    <button onClick={() => handleSearch(true)} disabled={loading} style={{ backgroundColor: 'transparent', border: 'none', color: '#0d47a1', cursor: 'pointer', padding: 0, fontWeight: 'bold' }}>
+                        {loading ? 'Buscando...' : 'Mais Pensamentos'}
+                    </button>
+                </div>
+            )}
         </div>
     );
 };
@@ -3048,46 +3034,21 @@ const renderFonteLink = (fonte: string) => {
     
     // Extract domain or URL if provided
     const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
-    const match = trimmed.match(urlRegex);
     
     // Clean text to perform high-precision Google search targeting the exact primary source
     const cleanSearchQuery = trimmed.replace(urlRegex, '').replace(/[()"]/g, ' ').replace(/\s+/g, ' ').trim() || trimmed;
     const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(cleanSearchQuery)}`;
 
     return (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <a 
-                href={searchUrl} 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                style={{ color: 'var(--primary-color)', textDecoration: 'underline', fontWeight: 'bold' }} 
-                title="Pesquisar fonte original no Google"
-            >
-                {trimmed}
-            </a>
-            <a 
-                href={searchUrl} 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                style={{ 
-                    fontSize: '0.75rem', 
-                    backgroundColor: '#e3f2fd', 
-                    color: '#0d47a1', 
-                    padding: '2px 8px', 
-                    borderRadius: '4px', 
-                    border: '1px solid #90caf9', 
-                    textDecoration: 'none', 
-                    fontWeight: 'bold', 
-                    display: 'inline-flex', 
-                    alignItems: 'center', 
-                    gap: '3px',
-                    lineHeight: '1.4'
-                }}
-                title="Acessar busca direta da fonte"
-            >
-                🔍 Acessar Fonte
-            </a>
-        </span>
+        <a 
+            href={searchUrl} 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            style={{ color: '#0d47a1', textDecoration: 'underline', fontWeight: 'bold' }} 
+            title="Pesquisar fonte original no Google"
+        >
+            {trimmed}
+        </a>
     );
 };
 
@@ -3243,9 +3204,13 @@ DIRETRIZES DE AUTENTICIDADE E EXATIDÃO:
                 <div className="card" key={item.id}>
                     {item.resumo.split('\n').filter(p => p.trim()).map((p, i) => <p key={i}>{p}</p>)}
                     <p><strong>Fonte:</strong> {renderFonteLink(item.fonte)}</p>
-                    <div className="quote-actions" style={{ justifyContent: 'flex-end', gap: '10px' }}>
-                        <button onClick={() => handleCheck(item.id, item)} disabled={checkState[item.id]?.loading}>Checar</button>
-                        <button onClick={() => handleExpand(item.id, item)} disabled={expandState[item.id]?.loading}>{expandState[item.id]?.loading ? 'Ampliando...' : 'Ampliar'}</button>
+                    <div className="quote-actions" style={{ justifyContent: 'flex-end', marginTop: '10px', gap: '15px' }}>
+                        <button onClick={() => handleCheck(item.id, item)} disabled={checkState[item.id]?.loading} style={{ backgroundColor: 'transparent', border: 'none', color: '#0d47a1', cursor: 'pointer', padding: 0, fontWeight: 'bold' }}>
+                            {checkState[item.id]?.loading ? 'Checando...' : 'Checar'}
+                        </button>
+                        <button onClick={() => handleExpand(item.id, item)} disabled={expandState[item.id]?.loading} style={{ backgroundColor: 'transparent', border: 'none', color: '#0d47a1', cursor: 'pointer', padding: 0, fontWeight: 'bold' }}>
+                            {expandState[item.id]?.loading ? 'Ampliando...' : 'Ampliar'}
+                        </button>
                     </div>
                     {checkState[item.id]?.loading && <LoadingSpinner />}
                     {checkState[item.id]?.result && <div className="sub-result">{checkState[item.id].result}</div>}
@@ -3261,12 +3226,12 @@ DIRETRIZES DE AUTENTICIDADE E EXATIDÃO:
                 </div>
             ))}
             {illustrations.length > 0 && (
-                <div className="more-buttons">
-                    <button onClick={() => handleSearch('notícias', null, true)} disabled={loading}>+ Notícias</button>
-                    <button onClick={() => handleSearch('estudos', null, true)} disabled={loading}>+ Estudos</button>
-                    <button onClick={() => handleSearch('histórias', null, true)} disabled={loading}>+ Histórias</button>
-                    <button onClick={() => handleSearch('literatura', null, true)} disabled={loading}>+ Literatura</button>
-                    <button onClick={() => handleSearch('arte', null, true)} disabled={loading}>+ Arte</button>
+                <div className="more-buttons" style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '20px', margin: '20px 0' }}>
+                    <button onClick={() => handleSearch('notícias', null, true)} disabled={loading} style={{ backgroundColor: 'transparent', border: 'none', color: '#0d47a1', cursor: 'pointer', padding: 0, fontWeight: 'bold' }}>+ Notícias</button>
+                    <button onClick={() => handleSearch('estudos', null, true)} disabled={loading} style={{ backgroundColor: 'transparent', border: 'none', color: '#0d47a1', cursor: 'pointer', padding: 0, fontWeight: 'bold' }}>+ Estudos</button>
+                    <button onClick={() => handleSearch('histórias', null, true)} disabled={loading} style={{ backgroundColor: 'transparent', border: 'none', color: '#0d47a1', cursor: 'pointer', padding: 0, fontWeight: 'bold' }}>+ Histórias</button>
+                    <button onClick={() => handleSearch('literatura', null, true)} disabled={loading} style={{ backgroundColor: 'transparent', border: 'none', color: '#0d47a1', cursor: 'pointer', padding: 0, fontWeight: 'bold' }}>+ Literatura</button>
+                    <button onClick={() => handleSearch('arte', null, true)} disabled={loading} style={{ backgroundColor: 'transparent', border: 'none', color: '#0d47a1', cursor: 'pointer', padding: 0, fontWeight: 'bold' }}>+ Arte</button>
                 </div>
             )}
         </div>

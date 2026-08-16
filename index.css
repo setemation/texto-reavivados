@@ -365,20 +365,67 @@ button:disabled {
 .quote-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 15px;
   margin-top: 0.75rem;
 }
 
 .quote-actions button {
-  background-color: #f5f5f5;
+  background-color: transparent;
   color: #0d47a1;
-  border: 1px solid #e0e0e0;
-  font-size: 0.8rem;
-  padding: 0.35rem 0.75rem;
+  border: none;
+  font-size: 0.85rem;
+  font-weight: bold;
+  padding: 0;
+  cursor: pointer;
+  box-shadow: none;
+  transition: color 0.15s ease, opacity 0.15s ease;
 }
 
 .quote-actions button:hover {
-  background-color: #e3f2fd;
+  background-color: transparent;
+  color: #1565c0;
+  text-decoration: underline;
+}
+
+.quote-actions button:disabled {
+  background-color: transparent;
+  color: #9e9e9e;
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+.more-buttons {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-top: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.more-buttons button {
+  background-color: transparent;
+  color: #0d47a1;
+  border: none;
+  font-size: 0.9rem;
+  font-weight: bold;
+  padding: 0;
+  cursor: pointer;
+  box-shadow: none;
+  transition: color 0.15s ease, opacity 0.15s ease;
+}
+
+.more-buttons button:hover {
+  background-color: transparent;
+  color: #1565c0;
+  text-decoration: underline;
+}
+
+.more-buttons button:disabled {
+  background-color: transparent;
+  color: #9e9e9e;
+  cursor: not-allowed;
+  text-decoration: none;
 }
 
 /* Custom Hebrew Font */
