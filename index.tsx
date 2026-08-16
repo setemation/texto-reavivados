@@ -2914,22 +2914,35 @@ const PensamentosView = ({ externalSearch }: { externalSearch?: string }) => {
 
         try {
             const existingQuotes = more && quotes.length > 0
-                ? `REGRA OBRIGATÓRIA: Não repita nenhuma das citações ou autores já apresentados a seguir. Forneça apenas citações inéditas e diferentes:\n${quotes.map((q: any, idx: number) => `${idx + 1}. Citação: "${q.quote}" — ${q.source}`).join('\n')}\n`
+                ? `REGRA OBRIGATÓRIA: Não repita nenhuma das citações ou autores já apresentados a seguir. Forneça apenas citações inéditas e diferentes:\n${quotes.map((q: any, idx: number) => `${idx + 1}. Citação: "${q.quote}" — ${q.source} (${q.work || ''})`).join('\n')}\n`
                 : '';
-            const prompt = `Encontre ${more ? 5 : 10} citações sobre "${query}".
-DIRETRIZES FUNDAMENTAIS DE AUTENTICIDADE E EXATIDÃO:
-1. As citações DEVEM ser rigorosamente AUTÊNTICAS, LITERAIS e EXATAS (verbatim, palavra por palavra).
-2. NÃO use paráfrases, citações parcialmente autênticas, adaptações ou formulações condensadas.
-3. Cite SOMENTE textos exatos e confiáveis que realmente existam, proferidos ou escritos por autores, teólogos, filósofos ou pensadores históricos de relevância comprovada.
-4. Não cite textos bíblicos diretos (apenas citações de autores/pensadores externos).
-5. No campo "source", informe o nome exato do autor e, sempre que possível, o título do livro ou obra original de onde a citação literal foi extraída.
-${existingQuotes}Responda em JSON com um array de objetos, cada um com as chaves "quote" e "source".`;
+            const prompt = `Encontre de 3 a 5 citações sobre o tema "${query}".
+
+CRITÉRIOS INEGOCIÁVEIS DE AUTENTICIDADE HISTÓRICA:
+1. CITAÇÃO EXATA E VERBATIM: O texto em "quote" deve ser exatamente o que o autor escreveu ou proferiu palavra por palavra.
+2. IDENTIFICAÇÃO DA OBRA ORIGINAL: No campo "work", informe obrigatoriamente o título exato do livro, sermão, tratado, ensaio ou carta onde a frase foi publicada (Ex: "Mero Cristianismo - Livro II, Cap. 1", "Confissões - Livro I", "O Peregrino", etc.).
+3. REGRA DE ELIMINAÇÃO: Se você NÃO souber com 100% de certeza a obra/publicação exata onde o autor escreveu essa frase, NÃO inclua a citação! Nunca invente frases para preencher quantidade.
+4. PROIBIÇÃO TOTAL: Proibido paráfrases, citações aproximadas, frases atribuídas erroneamente ou ditos populares da internet.
+5. Não cite textos bíblicos diretos (apenas citações de teólogos, filósofos, historiadores e escritores cristãos/clássicos consagrados).
+
+${existingQuotes}Responda em JSON com um array de objetos, onde cada objeto possui obrigatoriamente as chaves "quote", "source" e "work".`;
             const responseText = await generateAIContent({
                 prompt,
                 isJson: true,
                 config: {
                     responseMimeType: "application/json",
-                    responseSchema: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { quote: { type: Type.STRING }, source: { type: Type.STRING } } } }
+                    responseSchema: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                quote: { type: Type.STRING },
+                                source: { type: Type.STRING },
+                                work: { type: Type.STRING }
+                            },
+                            required: ["quote", "source", "work"]
+                        }
+                    }
                 }
             });
             const newQuotes = parseAIJsonArray(responseText)
@@ -2982,18 +2995,45 @@ ${existingQuotes}Responda em JSON com um array de objetos, cada um com as chaves
             {error && <ErrorMessage message={error} />}
             {quotes.map(q => {
                 const subAction = subActionState[q.id] || {};
+                const cleanQuoteForSearch = (q.quote || '').replace(/["'“”]/g, '').slice(0, 80);
+                const googleSearchUrl = `https://www.google.com/search?q=${encodeURIComponent(`"${cleanQuoteForSearch}" ${q.source || ''}`)}`;
+                
                 return (
                     <div className="card quote-card" key={q.id}>
-                        <blockquote>{q.quote}</blockquote>
-                        <footer>— {q.source}</footer>
-                        <div className="quote-actions">
-                            <button onClick={() => runSubAction(q.id, `Verifique a autenticidade da citação literal: "${q.quote}" atribuída a ${q.source}. Indique a obra exata e se o texto é 100% autêntico e fidedigno.`, 'verify')}>Verificar</button>
-                            <button onClick={() => runSubAction(q.id, `Fale sobre o autor e a obra: ${q.source}.`, 'about')}>Sobre</button>
-                            <button onClick={() => window.dispatchEvent(new CustomEvent('search-illustrations', { detail: q.quote }))}>🔍 Ilustrações</button>
+                        <blockquote>“{q.quote.replace(/^["'“]+|["'”]+$/g, '')}”</blockquote>
+                        <footer>
+                            — <strong>{q.source}</strong>
+                            {q.work ? <span style={{ fontStyle: 'italic', color: '#555', marginLeft: '6px' }}>({q.work})</span> : ''}
+                        </footer>
+                        <div className="quote-actions" style={{ flexWrap: 'wrap', gap: '8px' }}>
+                            <a 
+                                href={googleSearchUrl} 
+                                target="_blank" 
+                                rel="noopener noreferrer" 
+                                style={{
+                                    fontSize: '0.8rem',
+                                    backgroundColor: '#e3f2fd',
+                                    color: '#0d47a1',
+                                    padding: '4px 10px',
+                                    borderRadius: '4px',
+                                    border: '1px solid #90caf9',
+                                    textDecoration: 'none',
+                                    fontWeight: 'bold',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                }}
+                                title="Verificar citação e livro original no Google"
+                            >
+                                🔍 Checar no Google
+                            </a>
+                            <button onClick={() => runSubAction(q.id, `Faça uma auditoria crítica de autenticidade para a seguinte citação atribuída a ${q.source} (Obra: ${q.work || 'Não informada'}):\n"${q.quote}"\n\nResponda estruturado:\n1. Status: [100% Autêntica e Literal / Paráfrase / Apócrifa / Falsamente atribuída]\n2. Publicação Original: [Livro, capítulo, sermão ou documento exato onde foi impressa]\n3. Veredito: [Explicação curta se a frase é genuína palavra por palavra ou se sofreu adulteração].`, 'verify')}>Verificar com IA</button>
+                            <button onClick={() => runSubAction(q.id, `Apresente uma biografia concisa do autor (${q.source}) e a importância histórica da obra "${q.work || 'principal obra'}" no contexto da citação: "${q.quote}".`, 'about')}>Sobre o Autor</button>
+                            <button onClick={() => window.dispatchEvent(new CustomEvent('search-illustrations', { detail: q.quote }))}>🖼️ Ilustrações</button>
                         </div>
                         {subAction.loading && <LoadingSpinner />}
-                        {subAction.verify && <div className="sub-result"><strong>Verificação:</strong> {subAction.verify}</div>}
-                        {subAction.about && <div className="sub-result"><strong>Sobre:</strong> {subAction.about}</div>}
+                        {subAction.verify && <div className="sub-result"><strong>Auditoria de Autenticidade:</strong> {subAction.verify}</div>}
+                        {subAction.about && <div className="sub-result"><strong>Sobre o Autor e Obra:</strong> {subAction.about}</div>}
                     </div>
                 );
             })}
