@@ -393,15 +393,26 @@ const GeminiKeySelector = () => {
     );
 };
 
+const PT_BR_SYSTEM_INSTRUCTION = `Você é um redator, teólogo e linguista de alto nível especializado em publicações bíblicas e devocionais.
+DIRETRIZ OBRIGATÓRIA DE IDIOMA E ORTOGRAFIA:
+1. Todo o texto gerado DEVE ser rigorosamente redigido em Português do Brasil (PT-BR) correto, de padrão culto e natural.
+2. Certifique-se da total correção gramatical, concordância verbal e nominal, acentuação gráfica correta (incluindo o uso correto da crase) e pontuação impecável.
+3. É terminantemente proibido o uso de palavras com erros ortográficos, termos truncados, letras trocadas ou construções gramaticais incorretas.`;
+
 const generateAIContent = async ({ prompt, isJson = false, config }: { prompt: string; isJson?: boolean; config?: any }): Promise<string> => {
     const provider = localStorage.getItem('ai_provider') || 'gemini';
     if (provider === 'ollama') {
         const model = localStorage.getItem('ollama_model') || 'qwen2.5:14b';
         const url = localStorage.getItem('ollama_url') || 'http://localhost:11434';
         
+        const systemPrompt = config?.systemInstruction 
+            ? `${PT_BR_SYSTEM_INSTRUCTION}\n\n${config.systemInstruction}`
+            : PT_BR_SYSTEM_INSTRUCTION;
+
         const body: any = {
             model: model,
             prompt: prompt,
+            system: systemPrompt,
             stream: false
         };
         if (isJson) {
@@ -452,10 +463,18 @@ const generateAIContent = async ({ prompt, isJson = false, config }: { prompt: s
             const ai = new GoogleGenAI({ apiKey: currentKeyInfo.key });
 
             try {
+                const effectiveConfig = {
+                    ...(config || {}),
+                    systemInstruction: config?.systemInstruction
+                        ? `${PT_BR_SYSTEM_INSTRUCTION}\n\n${config.systemInstruction}`
+                        : PT_BR_SYSTEM_INSTRUCTION,
+                    ...(isJson ? { responseMimeType: "application/json" } : {})
+                };
+
                 const response = await ai.models.generateContent({
                     model: "gemini-flash-latest",
                     contents: prompt,
-                    config: config || (isJson ? { responseMimeType: "application/json" } : undefined)
+                    config: effectiveConfig
                 });
                 return response.text;
             } catch (e: any) {
@@ -2555,7 +2574,7 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
                 return;
             }
 
-            let prompt = `Faça uma exegese detalhada de ${targetRef}. Siga estas instruções estritas para cada seção:
+            let prompt = `Faça uma exegese detalhada de ${targetRef}. Todo o texto DEVE ser gerado em Português do Brasil (PT-BR) correto, de padrão culto e com ortografia impecável. Siga estas instruções estritas para cada seção:
 
 1. **Apresentação do Capítulo**: Escreva exatamente dois parágrafos apresentando o contexto geral do capítulo.
 2. **Análise Histórico-Cultural**: Escreva exatamente quatro parágrafos com informações sobre o contexto da época (política, religião, sociedade, costumes, leis, práticas, cidades, etc.) relacionadas ao versículo. **Cada tema deve estar em um parágrafo separado por duas quebras de linha**.
@@ -3028,11 +3047,11 @@ const IlustracoesView = ({ externalSearch }: { externalSearch?: string }) => {
             : '';
 
         const promptMap: Record<string, string> = {
-            'notícias': `Encontre 3 notícias reais que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos e a fonte (tente incluir uma URL direta se disponível).${existingIllustrations}`,
-            'estudos': `Encontre 2 estudos científicos ou acadêmicos que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos e a fonte (tente incluir uma URL direta se disponível).${existingIllustrations}`,
-            'histórias': `Encontre 2 enredos de filmes ou livros reais que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos e a fonte (tente incluir uma URL direta se disponível).${existingIllustrations}`,
-            'literatura': `Encontre 2 obras de ficção (literatura, romances, contos ou revistas em quadrinhos) que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos e a fonte.${existingIllustrations}`,
-            'arte': `Encontre 2 obras de arte (quadros, músicas, pinturas, esculturas ou outras manifestações artísticas) que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos e a fonte.${existingIllustrations}`
+            'notícias': `Encontre 3 notícias reais que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos em Português do Brasil (PT-BR) correto e a fonte (tente incluir uma URL direta se disponível).${existingIllustrations}`,
+            'estudos': `Encontre 2 estudos científicos ou acadêmicos que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos em Português do Brasil (PT-BR) correto e a fonte (tente incluir uma URL direta se disponível).${existingIllustrations}`,
+            'histórias': `Encontre 2 enredos de filmes ou livros reais que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos em Português do Brasil (PT-BR) correto e a fonte (tente incluir uma URL direta se disponível).${existingIllustrations}`,
+            'literatura': `Encontre 2 obras de ficção (literatura, romances, contos ou revistas em quadrinhos) que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos em Português do Brasil (PT-BR) correto e a fonte.${existingIllustrations}`,
+            'arte': `Encontre 2 obras de arte (quadros, músicas, pinturas, esculturas ou outras manifestações artísticas) que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos em Português do Brasil (PT-BR) correto e a fonte.${existingIllustrations}`
         };
         try {
             const responseText = await generateAIContent({
@@ -3060,7 +3079,7 @@ const IlustracoesView = ({ externalSearch }: { externalSearch?: string }) => {
     const handleCheck = async (id, item) => {
         setCheckState(prev => ({ ...prev, [id]: { loading: true } }));
         try {
-            const responseText = await generateAIContent({ prompt: `Verifique a confiabilidade da notícia/fonte: ${item.fonte} sobre o resumo: "${item.resumo}"` });
+            const responseText = await generateAIContent({ prompt: `Verifique a confiabilidade da notícia/fonte: ${item.fonte} sobre o resumo: "${item.resumo}" em Português do Brasil correto.` });
             setCheckState(prev => ({ ...prev, [id]: { loading: false, result: responseText } }));
         } catch (e) {
             setCheckState(prev => ({ ...prev, [id]: { loading: false, result: formatGeminiError(e, 'Erro na verificação.') } }));
@@ -3074,7 +3093,7 @@ const IlustracoesView = ({ externalSearch }: { externalSearch?: string }) => {
 Resumo: "${item.resumo}"
 Fonte: "${item.fonte}"
 
-Gere exatamente mais TRÊS parágrafos detalhados ampliando essa ilustração, contando com mais detalhes históricos, contextuais ou narrativos relevantes sobre o caso/fato descrito. Não inclua introduções nem conclusões, apenas os 3 parágrafos de ampliação.`;
+Gere exatamente mais TRÊS parágrafos detalhados ampliando essa ilustração em Português do Brasil (PT-BR) correto, de padrão culto e com ortografia impecável, contando com mais detalhes históricos, contextuais ou narrativos relevantes sobre o caso/fato descrito. Não inclua introduções nem conclusões, apenas os 3 parágrafos de ampliação.`;
             const responseText = await generateAIContent({ prompt });
             setExpandState(prev => ({ ...prev, [id]: { loading: false, result: responseText } }));
         } catch (e) {
