@@ -2916,7 +2916,14 @@ const PensamentosView = ({ externalSearch }: { externalSearch?: string }) => {
             const existingQuotes = more && quotes.length > 0
                 ? `REGRA OBRIGATÓRIA: Não repita nenhuma das citações ou autores já apresentados a seguir. Forneça apenas citações inéditas e diferentes:\n${quotes.map((q: any, idx: number) => `${idx + 1}. Citação: "${q.quote}" — ${q.source}`).join('\n')}\n`
                 : '';
-            const prompt = `Encontre ${more ? 5 : 10} citações diretas (verbatim) sobre "${query}". ATENÇÃO: Coloque SOMENTE citações que realmente existam. Confirme e verifique a veracidade e autenticidade de cada uma antes de apresentá-las. Não use paráfrases ou inspirações, apenas transcrições exatas. Não cite textos bíblicos. ${existingQuotes}Responda em JSON com um array de objetos, cada um com as chaves "quote" e "source".`;
+            const prompt = `Encontre ${more ? 5 : 10} citações sobre "${query}".
+DIRETRIZES FUNDAMENTAIS DE AUTENTICIDADE E EXATIDÃO:
+1. As citações DEVEM ser rigorosamente AUTÊNTICAS, LITERAIS e EXATAS (verbatim, palavra por palavra).
+2. NÃO use paráfrases, citações parcialmente autênticas, adaptações ou formulações condensadas.
+3. Cite SOMENTE textos exatos e confiáveis que realmente existam, proferidos ou escritos por autores, teólogos, filósofos ou pensadores históricos de relevância comprovada.
+4. Não cite textos bíblicos diretos (apenas citações de autores/pensadores externos).
+5. No campo "source", informe o nome exato do autor e, sempre que possível, o título do livro ou obra original de onde a citação literal foi extraída.
+${existingQuotes}Responda em JSON com um array de objetos, cada um com as chaves "quote" e "source".`;
             const responseText = await generateAIContent({
                 prompt,
                 isJson: true,
@@ -2980,7 +2987,7 @@ const PensamentosView = ({ externalSearch }: { externalSearch?: string }) => {
                         <blockquote>{q.quote}</blockquote>
                         <footer>— {q.source}</footer>
                         <div className="quote-actions">
-                            <button onClick={() => runSubAction(q.id, `Verifique a autenticidade da citação: "${q.quote}" atribuída a ${q.source}.`, 'verify')}>Verificar</button>
+                            <button onClick={() => runSubAction(q.id, `Verifique a autenticidade da citação literal: "${q.quote}" atribuída a ${q.source}. Indique a obra exata e se o texto é 100% autêntico e fidedigno.`, 'verify')}>Verificar</button>
                             <button onClick={() => runSubAction(q.id, `Fale sobre o autor e a obra: ${q.source}.`, 'about')}>Sobre</button>
                             <button onClick={() => window.dispatchEvent(new CustomEvent('search-illustrations', { detail: q.quote }))}>🔍 Ilustrações</button>
                         </div>
@@ -2998,25 +3005,49 @@ const PensamentosView = ({ externalSearch }: { externalSearch?: string }) => {
 const renderFonteLink = (fonte: string) => {
     if (!fonte) return null;
     const trimmed = fonte.trim();
+    
+    // Extract domain or URL if provided
     const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
     const match = trimmed.match(urlRegex);
-    if (match) {
-        let url = match[0];
-        if (url.toLowerCase().startsWith('www.')) {
-            url = 'https://' + url;
-        }
-        url = url.replace(/[.,;)]$/, '');
-        return (
-            <a href={url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary-color)', textDecoration: 'underline', fontWeight: 'bold' }}>
+    
+    // Clean text to perform high-precision Google search targeting the exact primary source
+    const cleanSearchQuery = trimmed.replace(urlRegex, '').replace(/[()"]/g, ' ').replace(/\s+/g, ' ').trim() || trimmed;
+    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(cleanSearchQuery)}`;
+
+    return (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <a 
+                href={searchUrl} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                style={{ color: 'var(--primary-color)', textDecoration: 'underline', fontWeight: 'bold' }} 
+                title="Pesquisar fonte original no Google"
+            >
                 {trimmed}
             </a>
-        );
-    }
-    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(trimmed)}`;
-    return (
-        <a href={searchUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary-color)', textDecoration: 'underline', fontWeight: 'bold' }}>
-            {trimmed}
-        </a>
+            <a 
+                href={searchUrl} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                style={{ 
+                    fontSize: '0.75rem', 
+                    backgroundColor: '#e3f2fd', 
+                    color: '#0d47a1', 
+                    padding: '2px 8px', 
+                    borderRadius: '4px', 
+                    border: '1px solid #90caf9', 
+                    textDecoration: 'none', 
+                    fontWeight: 'bold', 
+                    display: 'inline-flex', 
+                    alignItems: 'center', 
+                    gap: '3px',
+                    lineHeight: '1.4'
+                }}
+                title="Acessar busca direta da fonte"
+            >
+                🔍 Acessar Fonte
+            </a>
+        </span>
     );
 };
 
@@ -3047,11 +3078,37 @@ const IlustracoesView = ({ externalSearch }: { externalSearch?: string }) => {
             : '';
 
         const promptMap: Record<string, string> = {
-            'notícias': `Encontre 3 notícias reais que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos em Português do Brasil (PT-BR) correto e a fonte (tente incluir uma URL direta se disponível).${existingIllustrations}`,
-            'estudos': `Encontre 2 estudos científicos ou acadêmicos que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos em Português do Brasil (PT-BR) correto e a fonte (tente incluir uma URL direta se disponível).${existingIllustrations}`,
-            'histórias': `Encontre 2 enredos de filmes ou livros reais que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos em Português do Brasil (PT-BR) correto e a fonte (tente incluir uma URL direta se disponível).${existingIllustrations}`,
-            'literatura': `Encontre 2 obras de ficção (literatura, romances, contos ou revistas em quadrinhos) que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos em Português do Brasil (PT-BR) correto e a fonte.${existingIllustrations}`,
-            'arte': `Encontre 2 obras de arte (quadros, músicas, pinturas, esculturas ou outras manifestações artísticas) que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos em Português do Brasil (PT-BR) correto e a fonte.${existingIllustrations}`
+            'notícias': `Encontre 3 notícias reais e comprovadas que ilustram o tema "${query}".
+DIRETRIZES DE AUTENTICIDADE E EXATIDÃO:
+- As informações DEVEM ser rigorosamente AUTÊNTICAS, LITERAIS e EXATAS (fatos verídicos que realmente aconteceram, com nomes de pessoas reais, locais e datas exatas).
+- É terminantemente proibido inventar notícias, criar paráfrases fictícias ou condensações não factuais.
+- Forneça um resumo detalhado de dois parágrafos em Português do Brasil (PT-BR) correto.
+- Na chave "fonte", forneça o nome do veículo de imprensa confiável, o título da notícia e o ano (Ex: "G1 - [Título da Notícia], 2021" ou "BBC News - [Título da Matéria]").${existingIllustrations}`,
+
+            'estudos': `Encontre 2 estudos científicos ou acadêmicos reais e publicados que ilustram o tema "${query}".
+DIRETRIZES DE AUTENTICIDADE E EXATIDÃO:
+- As informações DEVEM ser rigorosamente AUTÊNTICAS, LITERAIS e EXATAS (pesquisas reais publicadas por universidades ou revistas científicas com dados verídicos).
+- É terminantemente proibido inventar dados estatísticos ou estudos hipotéticos.
+- Forneça um resumo detalhado de dois parágrafos em Português do Brasil (PT-BR) correto.
+- Na chave "fonte", forneça o nome da revista científica ou instituição, título exato do estudo e ano (Ex: "Nature - [Título do Estudo], 2020" ou "Harvard University - [Título da Pesquisa], 2019").${existingIllustrations}`,
+
+            'histórias': `Encontre 2 biografias ou fatos históricos reais e documentados de livros ou filmes biográficos que ilustram o tema "${query}".
+DIRETRIZES DE AUTENTICIDADE E EXATIDÃO:
+- As informações DEVEM ser rigorosamente AUTÊNTICAS, LITERAIS e EXATAS (pessoas reais, eventos históricos documentados ou obras biográficas existentes).
+- Forneça um resumo detalhado de dois parágrafos em Português do Brasil (PT-BR) correto.
+- Na chave "fonte", forneça o título da obra/livro/biografia, autor ou diretor e ano.${existingIllustrations}`,
+
+            'literatura': `Encontre 2 obras consagradas da literatura clássica ou mundial (romances, contos, peças de teatro reais) que ilustram o tema "${query}".
+DIRETRIZES DE AUTENTICIDADE E EXATIDÃO:
+- As obras e enredos DEVEM ser rigorosamente AUTÊNTICOS, LITERAIS e EXATOS (obras reais publicadas na história da literatura).
+- Forneça um resumo detalhado de dois parágrafos em Português do Brasil (PT-BR) correto.
+- Na chave "fonte", forneça o título exato da obra, autor e ano de publicação.${existingIllustrations}`,
+
+            'arte': `Encontre 2 obras de arte consagradas (quadros, esculturas, sinfonias, monumentos reais) que ilustram o tema "${query}".
+DIRETRIZES DE AUTENTICIDADE E EXATIDÃO:
+- As obras de arte DEVEM ser rigorosamente AUTÊNTICAS, LITERAIS e EXATAS (peças de arte reais e existentes).
+- Forneça um resumo detalhado de dois parágrafos em Português do Brasil (PT-BR) correto.
+- Na chave "fonte", forneça o nome da obra, artista/compositor, ano e localização/museu atual.${existingIllustrations}`
         };
         try {
             const responseText = await generateAIContent({
@@ -3079,7 +3136,7 @@ const IlustracoesView = ({ externalSearch }: { externalSearch?: string }) => {
     const handleCheck = async (id, item) => {
         setCheckState(prev => ({ ...prev, [id]: { loading: true } }));
         try {
-            const responseText = await generateAIContent({ prompt: `Verifique a confiabilidade da notícia/fonte: ${item.fonte} sobre o resumo: "${item.resumo}" em Português do Brasil correto.` });
+            const responseText = await generateAIContent({ prompt: `Verifique a autenticidade e confiabilidade da notícia/fonte: ${item.fonte} sobre o resumo: "${item.resumo}". Indique se é 100% autêntico, literal e exato em Português do Brasil correto.` });
             setCheckState(prev => ({ ...prev, [id]: { loading: false, result: responseText } }));
         } catch (e) {
             setCheckState(prev => ({ ...prev, [id]: { loading: false, result: formatGeminiError(e, 'Erro na verificação.') } }));
@@ -3089,11 +3146,15 @@ const IlustracoesView = ({ externalSearch }: { externalSearch?: string }) => {
     const handleExpand = async (id, item) => {
         setExpandState(prev => ({ ...prev, [id]: { loading: true } }));
         try {
-            const prompt = `Você é um redator auxiliar. Com base na seguinte ilustração (tema "${theme || item.category}"):
+            const prompt = `Você é um redator auxiliar. Com base na seguinte ilustração autêntica (tema "${theme || item.category}"):
 Resumo: "${item.resumo}"
 Fonte: "${item.fonte}"
 
-Gere exatamente mais TRÊS parágrafos detalhados ampliando essa ilustração em Português do Brasil (PT-BR) correto, de padrão culto e com ortografia impecável, contando com mais detalhes históricos, contextuais ou narrativos relevantes sobre o caso/fato descrito. Não inclua introduções nem conclusões, apenas os 3 parágrafos de ampliação.`;
+Gere exatamente mais TRÊS parágrafos detalhados ampliando essa ilustração.
+DIRETRIZES DE AUTENTICIDADE E EXATIDÃO:
+1. As informações DEVEM ser rigorosamente AUTÊNTICAS, LITERAIS e EXATAS, baseadas exclusivamente em fatos históricos e registros reais documentados.
+2. Não invente detalhes, não crie paráfrases fantasiosas nem adaptações fictícias.
+3. Escreva em Português do Brasil (PT-BR) correto, de padrão culto e com ortografia impecável. Não inclua introduções nem conclusões, apenas os 3 parágrafos de ampliação.`;
             const responseText = await generateAIContent({ prompt });
             setExpandState(prev => ({ ...prev, [id]: { loading: false, result: responseText } }));
         } catch (e) {
