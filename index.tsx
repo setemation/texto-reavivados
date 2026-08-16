@@ -23,7 +23,10 @@ const parseBold = (text = '') => {
 
 const formatGeminiError = (e: any, defaultMessage: string): string => {
     console.error(e);
-    const msg = typeof e === 'object' ? JSON.stringify(e) : (e?.message || e?.toString() || '');
+    const rawMsg = e?.message || e?.statusText || (typeof e === 'string' ? e : '');
+    const jsonMsg = (typeof e === 'object' && e !== null && !rawMsg) ? JSON.stringify(e) : '';
+    const msg = rawMsg || jsonMsg || String(e || '');
+
     if (msg.includes('503') || msg.includes('UNAVAILABLE') || msg.includes('overloaded') || msg.includes('ApiError')) {
         return 'O servidor do Google AI Studio está temporariamente sobrecarregado (Erro 503). O sistema tentará novamente em instantes.';
     }
@@ -36,32 +39,54 @@ const formatGeminiError = (e: any, defaultMessage: string): string => {
     if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('TypeError') || msg.includes('network error')) {
         return 'Erro de Conexão: Não foi possível conectar ao servidor de IA ou Ollama local.';
     }
-    return `${defaultMessage} (Detalhes: ${msg})`;
+    return msg && msg !== '{}' ? `${defaultMessage} (${msg})` : defaultMessage;
 };
 
 const parseAIJsonArray = (jsonStr: string): any[] => {
+    if (!jsonStr || typeof jsonStr !== 'string') return [];
     let cleanStr = jsonStr.trim();
-    if (cleanStr.startsWith('```json')) {
-        cleanStr = cleanStr.substring(7);
-    }
-    if (cleanStr.endsWith('```')) {
-        cleanStr = cleanStr.substring(0, cleanStr.length - 3);
-    }
-    cleanStr = cleanStr.trim();
-
-    const parsed = JSON.parse(cleanStr);
-    if (Array.isArray(parsed)) {
-        return parsed;
-    }
     
-    if (typeof parsed === 'object' && parsed !== null) {
-        for (const key of Object.keys(parsed)) {
-            if (Array.isArray(parsed[key])) {
-                return parsed[key];
+    // Remove markdown code fences if present
+    cleanStr = cleanStr.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+
+    try {
+        const parsed = JSON.parse(cleanStr);
+        if (Array.isArray(parsed)) return parsed;
+        if (typeof parsed === 'object' && parsed !== null) {
+            for (const key of Object.keys(parsed)) {
+                if (Array.isArray(parsed[key])) return parsed[key];
             }
         }
+    } catch (e) {
+        // Fallback 1: Extract substring between first '[' and last ']'
+        const firstBracket = cleanStr.indexOf('[');
+        const lastBracket = cleanStr.lastIndexOf(']');
+        if (firstBracket !== -1 && lastBracket > firstBracket) {
+            const arraySubstring = cleanStr.substring(firstBracket, lastBracket + 1);
+            try {
+                const parsed = JSON.parse(arraySubstring);
+                if (Array.isArray(parsed)) return parsed;
+            } catch (e2) {}
+        }
+
+        // Fallback 2: Extract substring between first '{' and last '}'
+        const firstBrace = cleanStr.indexOf('{');
+        const lastBrace = cleanStr.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace > firstBrace) {
+            const objSubstring = cleanStr.substring(firstBrace, lastBrace + 1);
+            try {
+                const parsed = JSON.parse(objSubstring);
+                if (typeof parsed === 'object' && parsed !== null) {
+                    for (const key of Object.keys(parsed)) {
+                        if (Array.isArray(parsed[key])) return parsed[key];
+                    }
+                }
+            } catch (e3) {}
+        }
+        throw new Error(`Resposta da IA não pôde ser interpretada como JSON.`);
     }
-    throw new Error("O JSON retornado não é um array e não contém nenhuma lista.");
+
+    return [];
 };
 
 // --- Ollama Launcher Button ---
@@ -479,7 +504,8 @@ const generateAIContent = async ({ prompt, isJson = false, config }: { prompt: s
                     contents: prompt,
                     config: effectiveConfig
                 });
-                return response.text;
+                const text = response.text || (typeof (response as any).text === 'function' ? (response as any).text() : '') || (response?.candidates?.[0]?.content?.parts?.[0]?.text) || '';
+                return text;
             } catch (e: any) {
                 console.error(`Erro com Gemini (${currentKeyInfo.name}):`, e);
                 lastError = e;
@@ -2934,7 +2960,6 @@ Responda estritamente em JSON com um array de exatamente 5 objetos, contendo as 
                 prompt,
                 isJson: true,
                 config: {
-                    temperature: 0.1,
                     responseMimeType: "application/json",
                     responseSchema: {
                         type: Type.ARRAY,
