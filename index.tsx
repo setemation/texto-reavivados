@@ -418,6 +418,9 @@ const generateAIContent = async ({ prompt, isJson = false, config }: { prompt: s
         if (isJson) {
             body.format = 'json';
         }
+        if (config?.temperature !== undefined) {
+            body.options = { temperature: config.temperature };
+        }
         
         const res = await fetch(`${url}/api/generate`, {
             method: 'POST',
@@ -2914,22 +2917,24 @@ const PensamentosView = ({ externalSearch }: { externalSearch?: string }) => {
 
         try {
             const existingQuotes = more && quotes.length > 0
-                ? `REGRA OBRIGATÓRIA: Não repita nenhuma das citações ou autores já apresentados a seguir. Forneça apenas citações inéditas e diferentes:\n${quotes.map((q: any, idx: number) => `${idx + 1}. Citação: "${q.quote}" — ${q.source} (${q.work || ''})`).join('\n')}\n`
+                ? `\nREGRA OBRIGATÓRIA DE NÃO REPETIÇÃO: Não repita nenhuma das citações ou autores já apresentados a seguir. Forneça 5 citações completamente INÉDITAS e diferentes:\n${quotes.map((q: any, idx: number) => `${idx + 1}. "${q.quote}" — ${q.source} (${q.work || ''})`).join('\n')}\n`
                 : '';
-            const prompt = `Encontre de 3 a 5 citações sobre o tema "${query}".
+            const prompt = `Encontre EXATAMENTE 5 citações históricas consagradas sobre o tema "${query}".
 
-CRITÉRIOS INEGOCIÁVEIS DE AUTENTICIDADE HISTÓRICA:
-1. CITAÇÃO EXATA E VERBATIM: O texto em "quote" deve ser exatamente o que o autor escreveu ou proferiu palavra por palavra.
-2. IDENTIFICAÇÃO DA OBRA ORIGINAL: No campo "work", informe obrigatoriamente o título exato do livro, sermão, tratado, ensaio ou carta onde a frase foi publicada (Ex: "Mero Cristianismo - Livro II, Cap. 1", "Confissões - Livro I", "O Peregrino", etc.).
-3. REGRA DE ELIMINAÇÃO: Se você NÃO souber com 100% de certeza a obra/publicação exata onde o autor escreveu essa frase, NÃO inclua a citação! Nunca invente frases para preencher quantidade.
-4. PROIBIÇÃO TOTAL: Proibido paráfrases, citações aproximadas, frases atribuídas erroneamente ou ditos populares da internet.
-5. Não cite textos bíblicos diretos (apenas citações de teólogos, filósofos, historiadores e escritores cristãos/clássicos consagrados).
-
-${existingQuotes}Responda em JSON com um array de objetos, onde cada objeto possui obrigatoriamente as chaves "quote", "source" e "work".`;
+DIRETRIZES FUNDAMENTAIS DE LITERALIDADE (IPSIS LITTERIS):
+1. LITERALIDADE TOTAL (*IPSIS LITTERIS*): O texto no campo "quote" DEVE ser a reprodução textual rigorosamente exata, palavra por palavra, da frase conforme escrita pelo autor e impressa nas edições em língua portuguesa.
+2. PROIBIÇÃO ABSOLUTA DE PARÁFRASES E ADAPTAÇÕES: NÃO faça resumos, NÃO adapte o vocabulário, NÃO crie formulações condensadas e NÃO traduza livremente de forma simplificada. O texto precisa ser a citação original exata.
+3. AUTORES HISTÓRICOS E TEÓLOGOS CONSAGRADOS: Selecione pensadores de grande envergadura histórica, teológica ou filosófica (como C.S. Lewis, Agostinho de Hipona, Charles Spurgeon, Martinho Lutero, João Calvino, Blaise Pascal, G.K. Chesterton, Jonathan Edwards, John Wesley, Dietrich Bonhoeffer, Fiódor Dostoiévski, Thomas Watson, etc.).
+4. OBRIGATORIEDADE DA OBRA ("work"): No campo "work", informe com máxima exatidão o título do livro, tratado, sermão, ensaio ou carta onde a frase foi publicada (Ex: "Mero Cristianismo - Livro II", "Confissões - Livro I", "Ortodoxia", "O Peregrino", etc.).
+5. Se você não tiver certeza absoluta da redação literal *ipsis litteris* ou da obra original de determinada frase, escolha outro autor/obra onde a citação textual exata seja confirmada.
+6. Não cite textos bíblicos diretos (apenas pensadores, teólogos e escritores clássicos).
+${existingQuotes}
+Responda estritamente em JSON com um array de exatamente 5 objetos, contendo as chaves: "quote" (texto literal), "source" (nome do autor) e "work" (título da obra/livro).`;
             const responseText = await generateAIContent({
                 prompt,
                 isJson: true,
                 config: {
+                    temperature: 0.1,
                     responseMimeType: "application/json",
                     responseSchema: {
                         type: Type.ARRAY,
