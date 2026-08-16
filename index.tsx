@@ -2358,11 +2358,14 @@ Retorne um texto bem formatado em Markdown com títulos curtos.`;
                 if (!prev) return prev;
                 const next = { ...prev };
                 if (type === 'teologica') {
-                    const parts = [...(next.analiseTeologica || [])];
+                    const raw = typeof next.analiseTeologica === 'string'
+                        ? next.analiseTeologica
+                        : (Array.isArray(next.analiseTeologica) ? (next.analiseTeologica as string[]).join('\n\n') : '');
+                    const parts = raw.split(/\n+/).filter((p: string) => p.trim());
                     parts[index] = newText;
-                    next.analiseTeologica = parts;
+                    next.analiseTeologica = parts.join('\n\n');
                 } else if (type === 'aplicacao') {
-                    const parts = [...(next.aplicacoes || [])];
+                    const parts = Array.isArray(next.aplicacoes) ? [...next.aplicacoes] : [];
                     parts[index] = newText;
                     next.aplicacoes = parts;
                 }
@@ -2390,12 +2393,15 @@ Retorne um texto bem formatado em Markdown com títulos curtos.`;
                 if (!prev) return prev;
                 const next = { ...prev };
                 if (type === 'teologica') {
-                    const parts = [...(next.analiseTeologica || [])];
-                    parts[index] = parts[index] + '\n\n' + newText;
-                    next.analiseTeologica = parts;
+                    const raw = typeof next.analiseTeologica === 'string'
+                        ? next.analiseTeologica
+                        : (Array.isArray(next.analiseTeologica) ? (next.analiseTeologica as string[]).join('\n\n') : '');
+                    const parts = raw.split(/\n+/).filter((p: string) => p.trim());
+                    parts[index] = (parts[index] ? parts[index] + '\n\n' : '') + newText;
+                    next.analiseTeologica = parts.join('\n\n');
                 } else if (type === 'aplicacao') {
-                    const parts = [...(next.aplicacoes || [])];
-                    parts[index] = parts[index] + '\n\n' + newText;
+                    const parts = Array.isArray(next.aplicacoes) ? [...next.aplicacoes] : [];
+                    parts[index] = (parts[index] ? parts[index] + '\n\n' : '') + newText;
                     next.aplicacoes = parts;
                 }
                 return next;
@@ -2730,7 +2736,7 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
                     </div>
                     <div className="card">
                         <h3>Análise Teológica</h3>
-                        {(result.analiseTeologica || '').split(/\n+/).filter(p => p.trim()).map((p, i, arr) => (
+                        {(typeof result.analiseTeologica === 'string' ? result.analiseTeologica : (Array.isArray(result.analiseTeologica) ? (result.analiseTeologica as string[]).join('\n\n') : '')).split(/\n+/).filter(p => p.trim()).map((p, i, arr) => (
                             <div key={i} style={{ marginBottom: '1.5rem', paddingBottom: '1.5rem', borderBottom: i < arr.length - 1 ? '1px solid #e0e0e0' : 'none' }}>
                                 <p>{parseBold(p)}</p>
                                 <div className="quote-actions" style={{ justifyContent: 'flex-start', marginTop: '10px', borderTop: 'none', paddingTop: 0, gap: '15px' }}>
@@ -2888,8 +2894,10 @@ const PensamentosView = ({ externalSearch }: { externalSearch?: string }) => {
         }
 
         try {
-            const existingQuotes = more ? `Evite citações semelhantes a estas: ${quotes.map(q => q.quote).join('; ')}` : '';
-            const prompt = `Encontre ${more ? 5 : 10} citações diretas (verbatim) sobre "${query}". ATENÇÃO: Coloque SOMENTE citações que realmente existam. Confirme e verifique a veracidade e autenticidade de cada uma antes de apresentá-las. Não use paráfrases ou inspirações, apenas transcrições exatas. Não cite textos bíblicos. ${existingQuotes}. Responda em JSON com um array de objetos, cada um com as chaves "quote" e "source".`;
+            const existingQuotes = more && quotes.length > 0
+                ? `REGRA OBRIGATÓRIA: Não repita nenhuma das citações ou autores já apresentados a seguir. Forneça apenas citações inéditas e diferentes:\n${quotes.map((q: any, idx: number) => `${idx + 1}. Citação: "${q.quote}" — ${q.source}`).join('\n')}\n`
+                : '';
+            const prompt = `Encontre ${more ? 5 : 10} citações diretas (verbatim) sobre "${query}". ATENÇÃO: Coloque SOMENTE citações que realmente existam. Confirme e verifique a veracidade e autenticidade de cada uma antes de apresentá-las. Não use paráfrases ou inspirações, apenas transcrições exatas. Não cite textos bíblicos. ${existingQuotes}Responda em JSON com um array de objetos, cada um com as chaves "quote" e "source".`;
             const responseText = await generateAIContent({
                 prompt,
                 isJson: true,
@@ -2898,7 +2906,9 @@ const PensamentosView = ({ externalSearch }: { externalSearch?: string }) => {
                     responseSchema: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { quote: { type: Type.STRING }, source: { type: Type.STRING } } } }
                 }
             });
-            const newQuotes = parseAIJsonArray(responseText).map((q: any) => ({ ...q, id: Math.random().toString(36) }));
+            const newQuotes = parseAIJsonArray(responseText)
+                .map((q: any) => ({ ...q, id: Math.random().toString(36) }))
+                .filter((q: any) => !more || !quotes.some((existing: any) => existing.quote?.trim().toLowerCase() === q.quote?.trim().toLowerCase()));
             setQuotes(prev => more ? [...prev, ...newQuotes] : newQuotes);
         } catch (e) {
             setError(formatGeminiError(e, 'Falha ao buscar pensamentos.'));
@@ -3013,12 +3023,16 @@ const IlustracoesView = ({ externalSearch }: { externalSearch?: string }) => {
             setExpandState({});
         }
 
+        const existingIllustrations = append && illustrations.length > 0
+            ? `\n\nREGRA OBRIGATÓRIA: Não repita, em hipótese alguma, nenhuma das seguintes ilustrações/histórias/notícias/obras já listadas na página. Forneça opções totalmente inéditas e diferentes destas:\n${illustrations.map((item: any, idx: number) => `${idx + 1}. "${(item.resumo || '').slice(0, 160)}..." (Fonte: ${item.fonte || 'N/A'})`).join('\n')}\n`
+            : '';
+
         const promptMap: Record<string, string> = {
-            'notícias': `Encontre 3 notícias reais que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos e a fonte (tente incluir uma URL direta se disponível).`,
-            'estudos': `Encontre 2 estudos científicos ou acadêmicos que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos e a fonte (tente incluir uma URL direta se disponível).`,
-            'histórias': `Encontre 2 enredos de filmes ou livros reais que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos e a fonte (tente incluir uma URL direta se disponível).`,
-            'literatura': `Encontre 2 obras de ficção (literatura, romances, contos ou revistas em quadrinhos) que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos e a fonte.`,
-            'arte': `Encontre 2 obras de arte (quadros, músicas, pinturas, esculturas ou outras manifestações artísticas) que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos e a fonte.`
+            'notícias': `Encontre 3 notícias reais que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos e a fonte (tente incluir uma URL direta se disponível).${existingIllustrations}`,
+            'estudos': `Encontre 2 estudos científicos ou acadêmicos que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos e a fonte (tente incluir uma URL direta se disponível).${existingIllustrations}`,
+            'histórias': `Encontre 2 enredos de filmes ou livros reais que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos e a fonte (tente incluir uma URL direta se disponível).${existingIllustrations}`,
+            'literatura': `Encontre 2 obras de ficção (literatura, romances, contos ou revistas em quadrinhos) que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos e a fonte.${existingIllustrations}`,
+            'arte': `Encontre 2 obras de arte (quadros, músicas, pinturas, esculturas ou outras manifestações artísticas) que ilustram o tema "${query}". Forneça um resumo detalhado de dois parágrafos e a fonte.${existingIllustrations}`
         };
         try {
             const responseText = await generateAIContent({
@@ -3029,14 +3043,19 @@ const IlustracoesView = ({ externalSearch }: { externalSearch?: string }) => {
                     responseSchema: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { resumo: { type: Type.STRING }, fonte: { type: Type.STRING } } } }
                 }
             });
-            const newItems = parseAIJsonArray(responseText).map((item: any) => ({ ...item, id: Math.random().toString(36), category }));
+            const newItems = parseAIJsonArray(responseText)
+                .map((item: any) => ({ ...item, id: Math.random().toString(36), category }))
+                .filter((item: any) => !append || !illustrations.some((existing: any) => 
+                    (existing.resumo && item.resumo && existing.resumo.trim() === item.resumo.trim()) ||
+                    (existing.fonte && item.fonte && existing.fonte.trim().toLowerCase() === item.fonte.trim().toLowerCase() && (existing.resumo || '').slice(0, 40) === (item.resumo || '').slice(0, 40))
+                ));
             setIllustrations(prev => append ? [...prev, ...newItems] : newItems);
         } catch (e) {
             setError(formatGeminiError(e, 'Falha ao buscar ilustrações.'));
         } finally {
             setLoading(false);
         }
-    }, [theme]);
+    }, [theme, illustrations]);
 
     const handleCheck = async (id, item) => {
         setCheckState(prev => ({ ...prev, [id]: { loading: true } }));
