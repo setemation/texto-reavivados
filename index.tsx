@@ -155,21 +155,29 @@ export interface GeminiKeyInfo {
 }
 
 const decodeKey = (encoded: string): string => {
+    if (!encoded) return '';
+    const trimmed = encoded.trim();
+    if (trimmed.startsWith('AIzaSy') || trimmed.startsWith('AQ.')) {
+        return trimmed;
+    }
     try {
-        if (typeof window !== 'undefined' && window.atob) {
-            return window.atob(encoded);
+        const decoded = typeof window !== 'undefined' && window.atob
+            ? window.atob(trimmed)
+            : Buffer.from(trimmed, 'base64').toString('utf-8');
+        if (/^[\x20-\x7E]+$/.test(decoded) && (decoded.startsWith('AIzaSy') || decoded.startsWith('AQ.'))) {
+            return decoded;
         }
-        return Buffer.from(encoded, 'base64').toString('utf-8');
+        return trimmed;
     } catch {
-        return encoded;
+        return trimmed;
     }
 };
 
 export const GEMINI_KEYS: GeminiKeyInfo[] = [
-    { id: 0, name: 'Chave 1 (Reavivados)', key: decodeKey('AIzaSyD5CumyyEW7S9X2LFYHoygsVPL_poZLoiM') },
+    { id: 0, name: 'Chave 1 (Reavivados)', key: decodeKey('QVEuQWI4Uk42Sk1DcWpfNXpRN1poaFR6UjhNVk5kMnVrUDJ6SkJpeUtwci1xcE5GQ01uTHc=') },
     { id: 1, name: 'Chave 2 (IASD Marco)', key: decodeKey('QVEuQWI4Uk42TGRoeGxRVEwycnhWZTR5dUxfc3Q2blAtTXZINEdtYTlDY2FHRi0wUDVMb1E=') },
-    { id: 2, name: 'Chave 3 (Pessoal)', key: decodeKey('QUl6YVN5Q2J6NW5rUmpDTVJBcjVmWnREc3plNkxxSU9tdGxhY3gw') },
-    { id: 3, name: 'Chave 4 (Jozy)', key: decodeKey('QVEuQWI4Uk42S1VxWDFrM1NqdVF2X3B3OS1idEtnOGxjb1RfUU5PR2lZWndnd1VEY1U1LXc=') },
+    { id: 2, name: 'Chave 3 (Pessoal)', key: decodeKey('QVEuQWI4Uk42S3pmUG9hdGlTcVZVS3dWbjIyZndBVmU4V3ZoNWkzalRvQnp2eHBfVmlJY0E=') },
+    { id: 3, name: 'Chave 4 (Jozy)', key: decodeKey('QVEuQWI4Uk42SlVIWW84Wlk4SzB2UGs2OFh6TTFwYzV0ekI5cUFXUkloRW4wZmJFTHVRWHc=') },
 ];
 
 export const getActiveGeminiKeyIndex = (): number => {
@@ -500,7 +508,7 @@ const generateAIContent = async ({ prompt, isJson = false, config }: { prompt: s
                 };
 
                 const response = await ai.models.generateContent({
-                    model: "gemini-flash-latest",
+                    model: "gemini-3.6-flash",
                     contents: prompt,
                     config: effectiveConfig
                 });
@@ -779,32 +787,6 @@ const getBibleTextFromRef = async (ref: string, defaultVersesStr = ''): Promise<
     return extractVersesFromRefLocal(bibleText, ref, defaultVersesStr);
 };
 
-const fetchCommentaries = async (refStr: string): Promise<any[]> => {
-    if (!isSupabaseConfigured()) return [];
-    try {
-        const match = refStr.trim().match(/^(.+?)\s+(\d+):?(.*)$/);
-        if (!match) return [];
-        const book = match[1].trim();
-        const chapter = parseInt(match[2], 10);
-        
-        const { data, error } = await supabase
-            .from('commentaries')
-            .select('author, text, verse')
-            .eq('book', book)
-            .eq('chapter', chapter)
-            .neq('author', 'Resumo dos Capítulos');
-            
-        if (error) {
-            console.error('Erro ao buscar comentários do Supabase:', error);
-            return [];
-        }
-        return data || [];
-    } catch (e) {
-        console.error('Erro ao buscar comentários:', e);
-        return [];
-    }
-};
-
 const getBookVariants = (rawBook: string): string[] => {
     const b = rawBook.trim().toLowerCase();
     const variants = new Set<string>([rawBook.trim()]);
@@ -852,6 +834,34 @@ const getBookVariants = (rawBook: string): string[] => {
     }
 
     return Array.from(variants);
+};
+
+const fetchCommentaries = async (refStr: string): Promise<any[]> => {
+    if (!isSupabaseConfigured()) return [];
+    try {
+        const match = refStr.trim().match(/^(.+?)\s+(\d+):?(.*)$/);
+        if (!match) return [];
+        const book = match[1].trim();
+        const chapter = parseInt(match[2], 10);
+        const bookVariants = getBookVariants(book);
+        
+        const { data, error } = await supabase
+            .from('commentaries')
+            .select('author, text, verse')
+            .in('book', bookVariants)
+            .eq('chapter', chapter)
+            .neq('author', 'Resumo dos Capítulos')
+            .order('id', { ascending: true });
+            
+        if (error) {
+            console.error('Erro ao buscar comentários do Supabase:', error);
+            return [];
+        }
+        return data || [];
+    } catch (e) {
+        console.error('Erro ao buscar comentários:', e);
+        return [];
+    }
 };
 
 const fetchChapterSummary = async (refStr: string): Promise<string | null> => {
@@ -3418,7 +3428,10 @@ const LeftSidebar = ({ selectedBook, setSelectedBook, selectedChapter, setSelect
                         <div 
                             key={num}
                             className={`number-btn ${selectedChapter === num ? 'active' : ''}`}
-                            onClick={() => { setSelectedChapter(num); setSelectedVerse(null); }}
+                            onClick={() => {
+                                setSelectedChapter(selectedChapter === num ? null : num);
+                                setSelectedVerse(null);
+                            }}
                         >
                             {num}
                         </div>
@@ -3432,7 +3445,7 @@ const LeftSidebar = ({ selectedBook, setSelectedBook, selectedChapter, setSelect
                         <div 
                             key={num}
                             className={`number-btn ${selectedVerse === num ? 'active' : ''}`}
-                            onClick={() => setSelectedVerse(num)}
+                            onClick={() => setSelectedVerse(selectedVerse === num ? null : num)}
                         >
                             {num}
                         </div>
@@ -3642,11 +3655,16 @@ const CenterContent = ({ selectedBook, selectedChapter, selectedVerse }) => {
 
     // Handle Commentaries Tab activation
     useEffect(() => {
-        if (activeTab === 'Comentários' && externalRefChapter) {
+        if (activeTab === 'Comentários' && selectedBook) {
             const fetchComments = async () => {
                 setLoadingComentarios(true);
                 try {
-                    const targetRefForDb = (selectedBook && selectedChapter) ? `${selectedBook.name} ${selectedChapter}${selectedVerse ? ':'+selectedVerse : ''}` : (externalRefVerse || externalRefChapter);
+                    // Quando estiver selecionado apenas o livro (sem capítulo ou versículo),
+                    // busca as informações do capítulo 0 (introdução da obra).
+                    // Quando estiver selecionado livro + capítulo, busca todos os comentários do capítulo.
+                    const targetRefForDb = !selectedChapter
+                        ? `${selectedBook.name} 0`
+                        : `${selectedBook.name} ${selectedChapter}`;
                     const res = await fetchCommentaries(targetRefForDb);
                     setComentarios(res);
                     // Reset checkboxes
@@ -3658,8 +3676,10 @@ const CenterContent = ({ selectedBook, selectedChapter, selectedVerse }) => {
                 }
             };
             fetchComments();
+        } else if (activeTab === 'Comentários' && !selectedBook) {
+            setComentarios([]);
         }
-    }, [activeTab, externalRefChapter, externalRefVerse]);
+    }, [activeTab, selectedBook, selectedChapter]);
 
     // Handle Original Tab activation
     useEffect(() => {
@@ -3769,7 +3789,15 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
         activeCommentaries = activeCommentaries.filter(c => String(c.verse) === String(selectedVerse));
     }
     
-    const authors = Array.from(new Set(comentarios.map(c => c.author)));
+    const PRIORITY_AUTHORS = ['Andrews Study Bible'];
+    const authors = Array.from(new Set<string>(comentarios.map((c: any) => c.author as string))).sort((a, b) => {
+        const ai = PRIORITY_AUTHORS.indexOf(a);
+        const bi = PRIORITY_AUTHORS.indexOf(b);
+        if (ai !== -1 && bi === -1) return -1;
+        if (ai === -1 && bi !== -1) return 1;
+        if (ai !== -1 && bi !== -1) return ai - bi;
+        return 0;
+    });
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '1rem', position: 'relative' }}>
@@ -3906,13 +3934,23 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
                             {loadingComentarios ? <LoadingSpinner /> : (
                                 <>
                                     {comentarios.length === 0 ? (
-                                        <div style={{ color: '#666', textAlign: 'center' }}>Nenhum comentário encontrado no banco de dados.</div>
+                                        <div style={{ color: '#666', textAlign: 'center', padding: '2rem' }}>
+                                            {!selectedBook 
+                                                ? 'Selecione um livro no painel lateral.' 
+                                                : (!selectedChapter 
+                                                    ? 'Nenhuma introdução encontrada para este livro no banco de dados.' 
+                                                    : 'Nenhum comentário encontrado no banco de dados para este capítulo.')}
+                                        </div>
                                     ) : (
                                         <>
                                             <div style={{ display: 'flex', width: '100%', gap: '10px', alignItems: 'stretch' }}>
                                                 {/* Box de Referência (30%) */}
                                                 <div style={{ flex: '0 0 30%', backgroundColor: '#fff', border: '1px solid #ccc', borderRadius: '4px', padding: '0.5rem 0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'flex-start', fontWeight: 'normal', color: 'inherit', fontSize: '0.9rem', boxSizing: 'border-box', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                    {selectedBook?.name} {selectedChapter}{selectedVerse ? `:${selectedVerse}` : ''}
+                                                    {selectedBook 
+                                                        ? (!selectedChapter 
+                                                            ? `${selectedBook.name} (Introdução)` 
+                                                            : (selectedVerse ? `${selectedBook.name} ${selectedChapter}:${selectedVerse}` : `${selectedBook.name} ${selectedChapter}`))
+                                                        : 'Selecione um livro'}
                                                 </div>
                                                 
                                                 {/* Menu Referências (70%) */}
@@ -3941,20 +3979,32 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
                                                 </div>
                                             </div>
                                             <div style={{ overflowY: 'auto', flexGrow: 1, paddingRight: '5px' }}>
-                                                {activeCommentaries.map(c => (
-                                                    <div key={c.id || Math.random()} style={{ marginBottom: '1rem', padding: '15px', backgroundColor: '#fff', border: '1px solid #e0e0e0', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', borderBottom: '1px solid #eee', paddingBottom: '8px' }}>
-                                                            <span style={{ fontSize: '1.2rem' }}>👤</span>
-                                                            <strong style={{ color: '#0d47a1', fontSize: '1.05rem' }}>{c.author}</strong>
-                                                            {c.verse && <span style={{ backgroundColor: '#e3f2fd', color: '#1565c0', padding: '2px 6px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold' }}>v. {c.verse}</span>}
-                                                        </div>
-                                                        <div style={{ color: '#424242', lineHeight: '1.6' }}>
-                                                            {c.text.split(/\r?\n/).map((p, i) => (
-                                                                <p key={i} style={{ marginBottom: '8px' }}>{parseBold(p)}</p>
-                                                            ))}
-                                                        </div>
+                                                {activeCommentaries.length === 0 ? (
+                                                    <div style={{ color: '#666', textAlign: 'center', padding: '2rem' }}>
+                                                        {selectedVerse 
+                                                            ? `Nenhum comentário encontrado para o versículo ${selectedVerse}.` 
+                                                            : 'Nenhum comentário disponível para os filtros selecionados.'}
                                                     </div>
-                                                ))}
+                                                ) : (
+                                                    activeCommentaries.map(c => (
+                                                        <div key={c.id || Math.random()} style={{ marginBottom: '1rem', padding: '15px', backgroundColor: '#fff', border: '1px solid #e0e0e0', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', borderBottom: '1px solid #eee', paddingBottom: '8px' }}>
+                                                                <span style={{ fontSize: '1.2rem' }}>👤</span>
+                                                                <strong style={{ color: '#0d47a1', fontSize: '1.05rem' }}>{c.author}</strong>
+                                                                {c.verse && Number(c.verse) > 0 ? (
+                                                                    <span style={{ backgroundColor: '#e3f2fd', color: '#1565c0', padding: '2px 6px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold' }}>v. {c.verse}</span>
+                                                                ) : (
+                                                                    <span style={{ backgroundColor: '#e8f5e9', color: '#2e7d32', padding: '2px 6px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold' }}>Introdução</span>
+                                                                )}
+                                                            </div>
+                                                            <div style={{ color: '#424242', lineHeight: '1.6' }}>
+                                                                {c.text.split(/\r?\n/).map((p, i) => (
+                                                                    <p key={i} style={{ marginBottom: '8px' }}>{parseBold(p)}</p>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    ))
+                                                )}
                                             </div>
                                         </>
                                     )}
@@ -4470,9 +4520,15 @@ const RightSidebar = ({ selectedBook, selectedChapter, selectedVerse }) => {
                 <div style={{ flex: 1, textAlign: 'center' }} className={`analysis-tab ${activeTab === 'Tradutor' ? 'active' : ''}`} onClick={() => setActiveTab('Tradutor')}>Tradutor</div>
             </div>
             <div style={{ padding: '0', flex: 1, minHeight: 0, overflowY: 'auto' }} className="embedded-view">
-                {activeTab === 'Pensamentos' && <PensamentosView />}
-                {activeTab === 'Ilustrações' && <IlustracoesView />}
-                {activeTab === 'Tradutor' && <TradutorView />}
+                <div style={{ display: activeTab === 'Pensamentos' ? 'block' : 'none' }}>
+                    <PensamentosView />
+                </div>
+                <div style={{ display: activeTab === 'Ilustrações' ? 'block' : 'none' }}>
+                    <IlustracoesView />
+                </div>
+                <div style={{ display: activeTab === 'Tradutor' ? 'block' : 'none' }}>
+                    <TradutorView />
+                </div>
             </div>
         </div>
     );
@@ -4650,15 +4706,13 @@ const App = () => {
                     />
                 </div>
                 
-                {rightSidebarMode !== 'expanded-left' && (
-                    <div className="center-content">
-                        <CenterContent 
-                            selectedBook={selectedBook}
-                            selectedChapter={selectedChapter}
-                            selectedVerse={selectedVerse}
-                        />
-                    </div>
-                )}
+                <div className="center-content" style={{ display: rightSidebarMode === 'expanded-left' ? 'none' : 'flex' }}>
+                    <CenterContent 
+                        selectedBook={selectedBook}
+                        selectedChapter={selectedChapter}
+                        selectedVerse={selectedVerse}
+                    />
+                </div>
                 
                 <div className="sidebar-right" style={{ 
                     position: 'relative', 
@@ -4765,13 +4819,13 @@ const App = () => {
                         )}
                     </div>
 
-                    {!isRightSidebarCollapsed && (
+                    <div style={{ display: isRightSidebarCollapsed ? 'none' : 'flex', flexDirection: 'column', height: '100%', flex: 1, minHeight: 0 }}>
                         <RightSidebar 
                             selectedBook={selectedBook}
                             selectedChapter={selectedChapter}
                             selectedVerse={selectedVerse}
                         />
-                    )}
+                    </div>
                 </div>
             </main>
         </div>
