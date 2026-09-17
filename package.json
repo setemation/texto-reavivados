@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "lint": "tsc --noEmit",
     "seed:supabase": "node scripts/seed_supabase.mjs",
-    "tradutor": "node translator/server.mjs"
+    "tradutor": "node translator/server.mjs",
+    "traduzir:clarke": "node scripts/translate_clarke_full.mjs"
   },
   "dependencies": {
     "@google/genai": "^1.20.0",
