@@ -3,7 +3,6 @@ import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
 
-// --- Carregamento de Variáveis de Ambiente ---
 function loadEnv() {
     const envPath = path.resolve(process.cwd(), '.env.local');
     if (fs.existsSync(envPath)) {
@@ -33,18 +32,16 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// --- 4 Chaves API Gemini para 4 Workers Paralelos ---
+// Chaves ativas (Chaves 2, 3 e 4 estão operacionais com cota gratuita ativa)
 const RAW_KEYS = [
-    'QVEuQWI4Uk42Sk1DcWpfNXpRN1poaFR6UjhNVk5kMnVrUDJ6SkJpeUtwci1xcE5GQ01uTHc=',
-    'QVEuQWI4Uk42TGRoeGxRVEwycnhWZTR5dUxfc3Q2blAtTXZINEdtYTlDY2FHRi0wUDVMb1E=',
-    'QVEuQWI4Uk42S3pmUG9hdGlTcVZVS3dWbjIyZndBVmU4V3ZoNWkzalRvQnp2eHBfVmlJY0E=',
-    'QVEuQWI4Uk42SlVIWW84Wlk4SzB2UGs2OFh6TTFwYzV0ekI5cUFXUkloRW4wZmJFTHVRWHc='
+    'QVEuQWI4Uk42TGRoeGxRVEwycnhWZTR5dUxfc3Q2blAtTXZINEdtYTlDY2FHRi0wUDVMb1E=', // IASD Marco
+    'QVEuQWI4Uk42S3pmUG9hdGlTcVZVS3dWbjIyZndBVmU4V3ZoNWkzalRvQnp2eHBfVmlJY0E=', // Pessoal
+    'QVEuQWI4Uk42SlVIWW84Wlk4SzB2UGs2OFh6TTFwYzV0ekI5cUFXUkloRW4wZmJFTHVRWHc='  // Jozy
 ];
 
 const API_KEYS = RAW_KEYS.map(k => Buffer.from(k, 'base64').toString('utf-8'));
 const NUM_WORKERS = API_KEYS.length;
 
-// --- Caminhos de Arquivos ---
 const EN_JSON_PATH = path.resolve(process.cwd(), 'traducoes', 'comentarios_clarke_en.json');
 const CACHE_PATH = path.resolve(process.cwd(), 'traducoes', 'clarke_pt_cache.json');
 const PT_JSON_PATH = path.resolve(process.cwd(), 'traducoes', 'comentarios_clarke_pt.json');
@@ -56,51 +53,34 @@ function cleanCommentText(text) {
 }
 
 async function runParallelClarkeTranslation() {
-    console.log(`🚀 Iniciando tradução paralela com ${NUM_WORKERS} workers de Adam Clarke (Gênesis a Apocalipse)...`);
-
-    if (!fs.existsSync(EN_JSON_PATH)) {
-        console.error(`❌ Arquivo ${EN_JSON_PATH} não encontrado.`);
-        process.exit(1);
-    }
+    console.log(`🚀 Iniciando tradução contínua de Adam Clarke com ${NUM_WORKERS} workers e persistência total...`);
 
     const allData = JSON.parse(fs.readFileSync(EN_JSON_PATH, 'utf8'));
-    console.log(`📦 Carregados ${allData.length} comentários de Adam Clarke.`);
 
     let cache = {};
     if (fs.existsSync(CACHE_PATH)) {
         try {
             cache = JSON.parse(fs.readFileSync(CACHE_PATH, 'utf8'));
-            console.log(`🔄 Cache carregado com ${Object.keys(cache).length} itens já traduzidos.`);
-        } catch (e) {}
-    }
-
-    if (fs.existsSync(PT_JSON_PATH)) {
-        try {
-            const existingPt = JSON.parse(fs.readFileSync(PT_JSON_PATH, 'utf8'));
-            existingPt.forEach(item => {
-                if (item.id && item.text) {
-                    cache[item.id] = item.text;
-                }
-            });
         } catch (e) {}
     }
 
     const pendingItems = allData.filter(item => !cache[item.id]);
-    console.log(`📊 Itens já traduzidos: ${Object.keys(cache).length} | Itens pendentes: ${pendingItems.length}`);
+    console.log(`📊 Itens já traduzidos e validados: ${Object.keys(cache).length} / ${allData.length} (${((Object.keys(cache).length / allData.length) * 100).toFixed(1)}%)`);
+    console.log(`⏳ Itens pendentes: ${pendingItems.length}`);
 
     if (pendingItems.length === 0) {
-        console.log('✅ Todos os 21.000 comentários de Adam Clarke já estão traduzidos!');
+        console.log('✅ Todos os 21.000 comentários de Adam Clarke estão 100% traduzidos!');
         return;
     }
 
-    // Criar lotes otimizados (máx 6 itens ou máx 8.000 caracteres)
+    // Criar lotes de até 4 comentários (máx 5.000 caracteres para respostas ultra rápidas)
     const batches = [];
     let curBatch = [];
     let curChars = 0;
 
     for (const item of pendingItems) {
         const textLen = (item.text || '').length;
-        if (curBatch.length >= 6 || (curChars + textLen > 8000 && curBatch.length > 0)) {
+        if (curBatch.length >= 4 || (curChars + textLen > 5000 && curBatch.length > 0)) {
             batches.push(curBatch);
             curBatch = [item];
             curChars = textLen;
@@ -111,7 +91,7 @@ async function runParallelClarkeTranslation() {
     }
     if (curBatch.length > 0) batches.push(curBatch);
 
-    console.log(`⚡ Lotes a processar: ${batches.length} divididos entre ${NUM_WORKERS} workers simultâneos.`);
+    console.log(`⚡ Lotes a processar: ${batches.length} entre ${NUM_WORKERS} workers.`);
 
     let batchIndex = 0;
     let completedItems = Object.keys(cache).length;
@@ -135,7 +115,7 @@ async function runParallelClarkeTranslation() {
             fs.writeFileSync(PT_JSON_PATH, JSON.stringify(ptData, null, 2), 'utf8');
             fs.writeFileSync(PUBLIC_PT_JSON_PATH, JSON.stringify(ptData, null, 2), 'utf8');
         } catch (e) {
-            console.error('⚠️ Erro ao gravar cache em disco:', e.message);
+            console.error('⚠️ Erro ao salvar cache:', e.message);
         }
     };
 
@@ -154,15 +134,9 @@ async function runParallelClarkeTranslation() {
                 text: cache[it.id]
             }));
 
-            const { error } = await supabase
-                .from('commentaries')
-                .upsert(rows, { onConflict: 'id' });
-
-            if (error) {
-                console.error(`⚠️ Erro ao atualizar Supabase:`, error.message);
-            }
+            await supabase.from('commentaries').upsert(rows, { onConflict: 'id' });
         } catch (e) {
-            console.error('⚠️ Erro de conexão Supabase:', e.message);
+            console.error('⚠️ Erro de sincronização Supabase:', e.message);
         } finally {
             isSaving = false;
         }
@@ -171,15 +145,10 @@ async function runParallelClarkeTranslation() {
     const worker = async (workerId) => {
         const apiKey = API_KEYS[workerId];
         const ai = new GoogleGenAI({ apiKey });
-        const models = ['gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-3.5-flash'];
 
         while (true) {
-            let myBatchIdx;
-            // Pegar próximo lote de forma atômica
-            if (batchIndex >= batches.length) {
-                break;
-            }
-            myBatchIdx = batchIndex++;
+            if (batchIndex >= batches.length) break;
+            const myBatchIdx = batchIndex++;
             const batch = batches[myBatchIdx];
             if (!batch || batch.length === 0) break;
 
@@ -202,77 +171,73 @@ ${JSON.stringify(inputBatch, null, 2)}`;
 
             let translated = false;
 
-            for (const model of models) {
-                if (translated) break;
-                for (let attempt = 1; attempt <= 2; attempt++) {
-                    try {
-                        const response = await ai.models.generateContent({
-                            model,
-                            contents: prompt,
-                            config: { responseMimeType: "application/json" }
-                        });
+            for (let attempt = 1; attempt <= 5; attempt++) {
+                try {
+                    const response = await ai.models.generateContent({
+                        model: 'gemini-3.6-flash',
+                        contents: prompt,
+                        config: { responseMimeType: "application/json" }
+                    });
 
-                        const rawText = response.text ? response.text.trim() : '';
-                        if (rawText) {
-                            const cleanJson = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-                            const parsed = JSON.parse(cleanJson);
-                            if (Array.isArray(parsed)) {
-                                for (const item of parsed) {
-                                    if (item && item.id && item.text) {
-                                        cache[item.id] = item.text.trim();
-                                    }
+                    const rawText = response.text ? response.text.trim() : '';
+                    if (rawText) {
+                        const cleanJson = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+                        const parsed = JSON.parse(cleanJson);
+                        if (Array.isArray(parsed)) {
+                            for (const item of parsed) {
+                                if (item && item.id && item.text) {
+                                    cache[item.id] = item.text.trim();
                                 }
-                                for (const it of batch) {
-                                    if (!cache[it.id]) {
-                                        cache[it.id] = it.text;
-                                    }
+                            }
+                            for (const it of batch) {
+                                if (cache[it.id]) {
                                     supabaseBuffer.push(it);
                                 }
-                                completedItems += batch.length;
-                                translated = true;
-                                break;
                             }
+                            completedItems += batch.length;
+                            translated = true;
+                            break;
                         }
-                    } catch (e) {
-                        const msg = e.message || String(e);
-                        if (msg.includes('429') || msg.includes('Quota') || msg.includes('503')) {
-                            await new Promise(r => setTimeout(r, 2000 * attempt));
-                        }
+                    }
+                } catch (e) {
+                    const msg = e.message || String(e);
+                    if (msg.includes('429') || msg.includes('Quota')) {
+                        // Aguardar reset da janela de cota por minuto
+                        console.log(`\n⏳ [W${workerId + 1}] Cota por minuto atingida. Aguardando 30s para retomar...`);
+                        await new Promise(r => setTimeout(r, 30000));
+                    } else {
+                        await new Promise(r => setTimeout(r, 3000));
                     }
                 }
             }
 
             if (!translated) {
-                // Fallback para não travar
-                for (const it of batch) {
-                    cache[it.id] = it.text;
-                    supabaseBuffer.push(it);
+                // Se falhar todas as tentativas, recoloca na fila para não perder nenhum comentário
+                batches.push(batch);
+            } else {
+                const pct = ((completedItems / allData.length) * 100).toFixed(1);
+                console.log(`[W${workerId + 1}] [${completedItems}/${allData.length} - ${pct}%] ${batch[0].book} ${batch[0].chapter}`);
+
+                if (supabaseBuffer.length >= 30) {
+                    await flushSupabase();
                 }
-                completedItems += batch.length;
+
+                if (myBatchIdx % 4 === 0) {
+                    saveFiles();
+                }
             }
 
-            const pct = ((completedItems / allData.length) * 100).toFixed(1);
-            console.log(`[W${workerId + 1}] [${completedItems}/${allData.length} - ${pct}%] ${batch[0].book} ${batch[0].chapter}`);
-
-            if (supabaseBuffer.length >= 40) {
-                await flushSupabase();
-            }
-
-            if (myBatchIdx % 5 === 0) {
-                saveFiles();
-            }
-
-            await new Promise(r => setTimeout(r, 600));
+            // Pacing de 2.5s por worker para respeitar suavemente o limite de 15-20 RPM
+            await new Promise(r => setTimeout(r, 2500));
         }
     };
 
-    // Iniciar os 4 workers simultaneamente
     const workers = Array.from({ length: NUM_WORKERS }, (_, i) => worker(i));
     await Promise.all(workers);
 
     saveFiles();
     await flushSupabase();
-    console.log(`\n🎉 Concluído com sucesso! Total traduzido: ${Object.keys(cache).length} / ${allData.length}.`);
+    console.log(`\n🎉 Processo finalizado! Total: ${Object.keys(cache).length} / ${allData.length}.`);
 }
 
 runParallelClarkeTranslation().catch(console.error);

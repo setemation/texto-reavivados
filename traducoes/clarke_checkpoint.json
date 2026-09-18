@@ -1,0 +1,35 @@
+{
+  "timestamp": "2026-09-18T03:12:32.850Z",
+  "totalCommentaries": 21000,
+  "translatedCount": 3086,
+  "pendingCount": 17914,
+  "percentage": "14.70%",
+  "nextItemToTranslate": {
+    "id": 93151,
+    "book": "Gênesis",
+    "chapter": 10,
+    "verse": 32
+  },
+  "booksSummary": {
+    "Gênesis": 736,
+    "Êxodo": 312,
+    "Levítico": 94,
+    "Números": 78,
+    "Deuteronômio": 81,
+    "Josué": 102,
+    "Juízes": 97,
+    "Rute": 12,
+    "1 Samuel": 134,
+    "2 Samuel": 69,
+    "1 Reis": 104,
+    "2 Reis": 120,
+    "1 Crônicas": 99,
+    "2 Crônicas": 116,
+    "Esdras": 38,
+    "Neemias": 54,
+    "Ester": 28,
+    "Jó": 213,
+    "Salmos": 557,
+    "Provérbios": 42
+  }
+}
