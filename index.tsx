@@ -1,4 +1,4 @@
-import React, { useState, useCallback, Fragment, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, Fragment, useEffect, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { GoogleGenAI, Type } from "@google/genai";
 import { supabase, isSupabaseConfigured } from './supabase';
@@ -1953,7 +1953,7 @@ const renderFormattedSummary = (text: string) => {
     return <div className="formatted-summary-content">{elements}</div>;
 };
 
-const CapituloView = ({ externalRef }) => {
+const CapituloView = ({ externalRef, fullRef }: { externalRef: string; fullRef?: string }) => {
     const [ref, setRef] = useState('');
     const [summary, setSummary] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
@@ -2093,7 +2093,7 @@ Retorne um texto bem formatado em Markdown com títulos curtos.`;
                     overflow: 'hidden', 
                     textOverflow: 'ellipsis' 
                 }}>
-                    {ref || 'Selecione o capítulo'}
+                    {fullRef || ref || 'Selecione o capítulo'}
                 </div>
             </div>
 
@@ -3378,6 +3378,46 @@ const LeftSidebar = ({ selectedBook, setSelectedBook, selectedChapter, setSelect
         setSelectedVerse(null);
     };
 
+    const bookListRef = useRef<HTMLDivElement>(null);
+    const chapterGridRef = useRef<HTMLDivElement>(null);
+    const verseGridRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (selectedBook && bookListRef.current) {
+            const timer = setTimeout(() => {
+                const activeEl = bookListRef.current?.querySelector('.book-item.active') as HTMLElement;
+                if (activeEl) {
+                    activeEl.scrollIntoView({ block: 'start', behavior: 'smooth' });
+                }
+            }, 50);
+            return () => clearTimeout(timer);
+        }
+    }, [selectedBook, filteredBooks]);
+
+    useEffect(() => {
+        if (selectedChapter && chapterGridRef.current) {
+            const timer = setTimeout(() => {
+                const activeEl = chapterGridRef.current?.querySelector('.number-btn.active') as HTMLElement;
+                if (activeEl) {
+                    activeEl.scrollIntoView({ block: 'start', behavior: 'smooth' });
+                }
+            }, 50);
+            return () => clearTimeout(timer);
+        }
+    }, [selectedChapter]);
+
+    useEffect(() => {
+        if (selectedVerse && verseGridRef.current) {
+            const timer = setTimeout(() => {
+                const activeEl = verseGridRef.current?.querySelector('.number-btn.active') as HTMLElement;
+                if (activeEl) {
+                    activeEl.scrollIntoView({ block: 'start', behavior: 'smooth' });
+                }
+            }, 50);
+            return () => clearTimeout(timer);
+        }
+    }, [selectedVerse]);
+
     return (
         <>
             <div style={{ padding: '0.2rem' }}>
@@ -3409,7 +3449,7 @@ const LeftSidebar = ({ selectedBook, setSelectedBook, selectedChapter, setSelect
             </div>
             <div className="selection-box">
                 <h3>LIVRO</h3>
-                <div className="book-list">
+                <div className="book-list" ref={bookListRef}>
                     {filteredBooks.map(book => (
                         <div 
                             key={book.name} 
@@ -3423,7 +3463,7 @@ const LeftSidebar = ({ selectedBook, setSelectedBook, selectedChapter, setSelect
             </div>
             <div className="selection-box">
                 <h3>CAPÍTULO</h3>
-                <div className="number-grid">
+                <div className="number-grid" ref={chapterGridRef}>
                     {selectedBook ? Array.from({ length: selectedBook.chapters }, (_, i) => i + 1).map(num => (
                         <div 
                             key={num}
@@ -3440,7 +3480,7 @@ const LeftSidebar = ({ selectedBook, setSelectedBook, selectedChapter, setSelect
             </div>
             <div className="selection-box">
                 <h3>VERSÍCULO</h3>
-                <div className="number-grid" style={{ maxHeight: '210px' }}>
+                <div className="number-grid" style={{ maxHeight: '210px' }} ref={verseGridRef}>
                     {selectedChapter && selectedBook && selectedBook.verses ? Array.from({ length: selectedBook.verses[selectedChapter - 1] }, (_, i) => i + 1).map(num => (
                         <div 
                             key={num}
@@ -3460,6 +3500,10 @@ const LeftSidebar = ({ selectedBook, setSelectedBook, selectedChapter, setSelect
 const CenterContent = ({ selectedBook, selectedChapter, selectedVerse }) => {
     const [verses, setVerses] = useState([]);
     const [bhsWordsByVerse, setBhsWordsByVerse] = useState({});
+    const [greekWordsByVerse, setGreekWordsByVerse] = useState<Record<number, any[]>>({});
+    const [showNAA, setShowNAA] = useState(true);
+    const [showHEB, setShowHEB] = useState(true);
+    const [showGRE, setShowGRE] = useState(true);
     const [loading, setLoading] = useState(false);
     const [activeTab, setActiveTab] = useState('Capítulo');
     const [expandedBlock, setExpandedBlock] = useState<string | null>(null);
@@ -3591,6 +3635,7 @@ const CenterContent = ({ selectedBook, selectedChapter, selectedVerse }) => {
         if (!externalRefChapter) {
             setVerses([]);
             setBhsWordsByVerse({});
+            setGreekWordsByVerse({});
             return;
         }
         
@@ -3615,18 +3660,20 @@ const CenterContent = ({ selectedBook, selectedChapter, selectedVerse }) => {
                 }
                 setVerses(versesArray);
 
-                // Fetch BHS Text for the chapter
+                // Fetch Original Text (BHS Hebrew for OT, Greek for NT)
                 const match = externalRefChapter.match(/^(.+?)\s+(\d+)/);
                 if (match) {
                     const bookName = match[1].trim();
                     const chapterNum = parseInt(match[2], 10);
                     const bookIdx = getHebrewBookIndex(bookName);
                     if (bookIdx !== -1) {
+                        // Antigo Testamento -> Hebraico (BHS)
+                        setGreekWordsByVerse({});
                         const response = await fetch(`/api/hebrew-bible?book=${bookIdx + 1}&chapter=${chapterNum}`);
                         if (response.ok) {
                             const json = await response.json();
                             const words = json.data || [];
-                            const map = {};
+                            const map: Record<number, any[]> = {};
                             words.forEach(w => {
                                 if (!map[w.verse]) map[w.verse] = [];
                                 map[w.verse].push(w);
@@ -3641,7 +3688,34 @@ const CenterContent = ({ selectedBook, selectedChapter, selectedVerse }) => {
                             setBhsWordsByVerse({});
                         }
                     } else {
-                         setBhsWordsByVerse({});
+                        // Novo Testamento -> Grego (Original_ via Supabase)
+                        setBhsWordsByVerse({});
+                        try {
+                            const { data } = await supabase
+                                .from('verses')
+                                .select('*')
+                                .eq('book', `Original_${bookName}`)
+                                .eq('chapter', chapterNum)
+                                .order('verse', { ascending: true });
+                            if (data && data.length > 0) {
+                                const gMap: Record<number, any[]> = {};
+                                data.forEach((r: any) => {
+                                    try {
+                                        gMap[r.verse] = typeof r.text === 'string' ? JSON.parse(r.text) : r.text;
+                                    } catch (err) {}
+                                });
+                                if (selectedVerse) {
+                                    setGreekWordsByVerse({ [selectedVerse]: gMap[selectedVerse] || [] });
+                                } else {
+                                    setGreekWordsByVerse(gMap);
+                                }
+                            } else {
+                                setGreekWordsByVerse({});
+                            }
+                        } catch (err) {
+                            console.error('Erro ao buscar versão em grego:', err);
+                            setGreekWordsByVerse({});
+                        }
                     }
                 }
             } catch (e) {
@@ -3806,7 +3880,10 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
                 flex: expandedBlock === 'reading' ? '1 1 100%' : '0 0 auto', 
                 maxHeight: expandedBlock === 'reading' ? '100%' : '38vh',
                 minHeight: '100px', 
-                overflowY: 'auto',
+                padding: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
                 position: expandedBlock === 'reading' ? 'absolute' : 'relative',
                 top: expandedBlock === 'reading' ? 0 : 'auto',
                 left: expandedBlock === 'reading' ? 0 : 'auto',
@@ -3815,71 +3892,190 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
                 zIndex: expandedBlock === 'reading' ? 10 : 1,
                 opacity: expandedBlock === 'analysis' ? 0.3 : 1 
             }}>
-                <button 
-                    onClick={() => setExpandedBlock(expandedBlock === 'reading' ? null : 'reading')}
-                    style={{
-                        position: 'absolute', top: '10px', right: '10px',
-                        width: '32px', height: '32px', fontSize: '1.2rem', 
-                        backgroundColor: 'transparent', color: '#616161', border: 'none', 
-                        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        zIndex: 20
-                    }}
-                    title={expandedBlock === 'reading' ? "Restaurar" : "Expandir"}
-                >
-                    {expandedBlock === 'reading' ? '–' : '☐'}
-                </button>
-                {loading ? <LoadingSpinner /> : (
-                    verses.length === 0 ? <div style={{color: '#666'}}>Texto não encontrado.</div> :
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                        {verses.map(v => (
-                            <div key={v.num} style={{ borderBottom: '1px dashed #e1eaf5', paddingBottom: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                {/* NAA Text */}
-                                <p style={{ margin: 0, fontSize: '16px', lineHeight: '1.7', textAlign: 'left' }}>
-                                    <strong>{v.num} </strong>
-                                    {parseBold(v.text)}
-                                </p>
-                                
-                                {/* BHS Text */}
-                                {bhsWordsByVerse[v.num] && bhsWordsByVerse[v.num].length > 0 && (
-                                    <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: '10px 6px', alignItems: 'center', direction: 'rtl', textAlign: 'right', backgroundColor: '#edf4fc', padding: '8px 12px', borderRadius: '8px', borderRight: '3px solid #2b569a' }}>
-                                        {bhsWordsByVerse[v.num].map((word, idx) => (
-                                            <span
-                                                key={idx}
-                                                onClick={() => setSelectedBhsWord(word)}
-                                                title={word.gloss || ''}
-                                                style={{
-                                                    fontFamily: "'SBL BibLit', 'SBL Hebrew', 'Times New Roman', serif",
-                                                    fontSize: '1.75rem',
-                                                    cursor: 'pointer',
-                                                    padding: '2px 6px',
-                                                    borderRadius: '6px',
-                                                    backgroundColor: selectedBhsWord?.sort === word.sort ? '#fff' : 'transparent',
-                                                    color: selectedBhsWord?.sort === word.sort ? '#0d47a1' : '#212121',
-                                                    transition: 'all 0.15s ease',
-                                                    borderBottom: selectedBhsWord?.sort === word.sort ? '3px solid #2b569a' : '3px solid transparent',
-                                                    lineHeight: '2.4rem'
-                                                }}
-                                                onMouseOver={e => {
-                                                    if (selectedBhsWord?.sort !== word.sort) {
-                                                        e.currentTarget.style.backgroundColor = '#fff';
-                                                        e.currentTarget.style.color = '#2b569a';
-                                                    }
-                                                }}
-                                                onMouseOut={e => {
-                                                    if (selectedBhsWord?.sort !== word.sort) {
-                                                        e.currentTarget.style.backgroundColor = 'transparent';
-                                                        e.currentTarget.style.color = '#212121';
-                                                    }
-                                                }}
-                                                dangerouslySetInnerHTML={{ __html: word.word }}
-                                            />
-                                        ))}
-                                    </div>
-                                )}
+                {/* Linha do Menu com as versões e o quadrado de maximizar */}
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'flex-end',
+                    gap: '8px',
+                    backgroundColor: '#eceff1',
+                    borderBottom: '1px solid #cfd8dc',
+                    padding: '6px 14px',
+                    minHeight: '40px',
+                    boxSizing: 'border-box',
+                    flexShrink: 0
+                }}>
+                    <button
+                        onClick={() => setShowNAA(!showNAA)}
+                        style={{
+                            backgroundColor: showNAA ? '#2196f3' : '#b0bec5',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: '4px',
+                            padding: '4px 10px',
+                            fontSize: '0.75rem',
+                            fontWeight: 'bold',
+                            cursor: 'pointer',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                            transition: 'background-color 0.15s ease'
+                        }}
+                        title={showNAA ? "Desativar versão NAA (Português)" : "Ativar versão NAA (Português)"}
+                    >
+                        NAA
+                    </button>
+                    <button
+                        onClick={() => setShowHEB(!showHEB)}
+                        style={{
+                            backgroundColor: showHEB ? '#2196f3' : '#b0bec5',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: '4px',
+                            padding: '4px 10px',
+                            fontSize: '0.75rem',
+                            fontWeight: 'bold',
+                            cursor: 'pointer',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                            transition: 'background-color 0.15s ease'
+                        }}
+                        title={showHEB ? "Desativar versão HEB (Hebraico)" : "Ativar versão HEB (Hebraico)"}
+                    >
+                        HEB
+                    </button>
+                    <button
+                        onClick={() => setShowGRE(!showGRE)}
+                        style={{
+                            backgroundColor: showGRE ? '#2196f3' : '#b0bec5',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: '4px',
+                            padding: '4px 10px',
+                            fontSize: '0.75rem',
+                            fontWeight: 'bold',
+                            cursor: 'pointer',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                            transition: 'background-color 0.15s ease'
+                        }}
+                        title={showGRE ? "Desativar versão GRE (Grego)" : "Ativar versão GRE (Grego)"}
+                    >
+                        GRE
+                    </button>
+                    <button 
+                        onClick={() => setExpandedBlock(expandedBlock === 'reading' ? null : 'reading')}
+                        style={{
+                            width: '28px', height: '28px', fontSize: '1.2rem', 
+                            backgroundColor: 'transparent', color: '#757575', 
+                            border: 'none', borderRadius: '4px',
+                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            transition: 'color 0.15s ease'
+                        }}
+                        onMouseOver={(e) => e.currentTarget.style.color = '#212121'}
+                        onMouseOut={(e) => e.currentTarget.style.color = '#757575'}
+                        title={expandedBlock === 'reading' ? "Restaurar" : "Maximizar"}
+                    >
+                        {expandedBlock === 'reading' ? '–' : '☐'}
+                    </button>
+                </div>
+
+                {/* Conteúdo rolável com os textos bíblicos */}
+                <div style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.25rem' }}>
+                    {loading ? <LoadingSpinner /> : (
+                        verses.length === 0 ? <div style={{color: '#666'}}>Texto não encontrado.</div> :
+                        (!showNAA && !showHEB && !showGRE) ? (
+                            <div style={{ color: '#888', fontStyle: 'italic', textAlign: 'center', padding: '2rem 0' }}>
+                                Nenhuma versão bíblica ativada. Clique nos botões acima (NAA, HEB, GRE) para exibir o texto.
                             </div>
-                        ))}
-                    </div>
-                )}
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                                {verses.map(v => (
+                                    <div key={v.num} style={{ borderBottom: '1px dashed #e1eaf5', paddingBottom: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                        {/* NAA Text */}
+                                        {showNAA && (
+                                            <p style={{ margin: 0, fontSize: '16px', lineHeight: '1.7', textAlign: 'left' }}>
+                                                <strong>{v.num} </strong>
+                                                {parseBold(v.text)}
+                                            </p>
+                                        )}
+                                        
+                                        {/* BHS Text */}
+                                        {showHEB && bhsWordsByVerse[v.num] && bhsWordsByVerse[v.num].length > 0 && (
+                                            <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: '10px 6px', alignItems: 'center', direction: 'rtl', textAlign: 'right', backgroundColor: '#edf4fc', padding: '8px 12px', borderRadius: '8px', borderRight: '3px solid #2b569a' }}>
+                                                {bhsWordsByVerse[v.num].map((word, idx) => (
+                                                    <span
+                                                        key={idx}
+                                                        onClick={() => setSelectedBhsWord(word)}
+                                                        title={word.gloss || ''}
+                                                        style={{
+                                                            fontFamily: "'SBL BibLit', 'SBL Hebrew', 'Times New Roman', serif",
+                                                            fontSize: '1.75rem',
+                                                            cursor: 'pointer',
+                                                            padding: '2px 6px',
+                                                            borderRadius: '6px',
+                                                            backgroundColor: selectedBhsWord?.sort === word.sort ? '#fff' : 'transparent',
+                                                            color: selectedBhsWord?.sort === word.sort ? '#0d47a1' : '#212121',
+                                                            transition: 'all 0.15s ease',
+                                                            borderBottom: selectedBhsWord?.sort === word.sort ? '3px solid #2b569a' : '3px solid transparent',
+                                                            lineHeight: '2.4rem'
+                                                        }}
+                                                        onMouseOver={e => {
+                                                            if (selectedBhsWord?.sort !== word.sort) {
+                                                                e.currentTarget.style.backgroundColor = '#fff';
+                                                                e.currentTarget.style.color = '#2b569a';
+                                                            }
+                                                        }}
+                                                        onMouseOut={e => {
+                                                            if (selectedBhsWord?.sort !== word.sort) {
+                                                                e.currentTarget.style.backgroundColor = 'transparent';
+                                                                e.currentTarget.style.color = '#212121';
+                                                            }
+                                                        }}
+                                                        dangerouslySetInnerHTML={{ __html: word.word }}
+                                                    />
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {/* Greek Text (New Testament) */}
+                                        {showGRE && greekWordsByVerse[v.num] && greekWordsByVerse[v.num].length > 0 && (
+                                            <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: '6px 4px', alignItems: 'center', direction: 'ltr', textAlign: 'left', backgroundColor: '#edf4fc', padding: '8px 12px', borderRadius: '8px', borderLeft: '3px solid #2b569a' }}>
+                                                {greekWordsByVerse[v.num].map((word: any, idx: number) => (
+                                                    <span
+                                                        key={idx}
+                                                        onClick={() => {
+                                                            if (word.strongs) {
+                                                                handleSelectStrongCode(word.strongs.startsWith('G') ? word.strongs : `G${word.strongs}`);
+                                                            }
+                                                        }}
+                                                        title={`${word.translit || ''} - ${word.english || ''} (${word.strongs ? 'G' + word.strongs : ''})`}
+                                                        style={{
+                                                            fontFamily: "'Times New Roman', 'SBL Greek', serif",
+                                                            fontSize: '1.25rem',
+                                                            cursor: 'pointer',
+                                                            padding: '2px 4px',
+                                                            borderRadius: '4px',
+                                                            color: '#212121',
+                                                            lineHeight: '1.8rem',
+                                                            transition: 'all 0.15s ease'
+                                                        }}
+                                                        onMouseOver={e => {
+                                                            e.currentTarget.style.backgroundColor = '#ffffff';
+                                                            e.currentTarget.style.color = '#0d47a1';
+                                                        }}
+                                                        onMouseOut={e => {
+                                                            e.currentTarget.style.backgroundColor = 'transparent';
+                                                            e.currentTarget.style.color = '#212121';
+                                                        }}
+                                                    >
+                                                        {word.original}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )
+                    )}
+                </div>
             </div>
             
             <div className="analysis-box" style={{ 
@@ -3920,7 +4116,7 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
                 </div>
                 <div className="analysis-content" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                     {activeTab === 'Capítulo' && (
-                        externalRefChapter ? <div className="embedded-view"><CapituloView externalRef={externalRefChapter} /></div> : <div style={{ color: '#666', textAlign: 'center' }}>Selecione o capítulo.</div>
+                        externalRefChapter ? <div className="embedded-view"><CapituloView externalRef={externalRefChapter} fullRef={displayTitle} /></div> : <div style={{ color: '#666', textAlign: 'center' }}>Selecione o capítulo.</div>
                     )}
                     {activeTab === 'Versículo' && (
                         selectedVerse ? (
@@ -4333,176 +4529,348 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
     );
 };
 
-const TradutorView = () => {
-    const [sourceText, setSourceText] = useState('');
-    const [translatedText, setTranslatedText] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
-    const [copied, setCopied] = useState(false);
+const BibleReferencePickerModal = ({
+    isOpen,
+    onClose,
+    selectedBook,
+    selectedChapter,
+    selectedVerse,
+    onSelect
+}: {
+    isOpen: boolean;
+    onClose: () => void;
+    selectedBook: any;
+    selectedChapter: number | null;
+    selectedVerse: number | null;
+    onSelect: (book: any, chapter: number, verse: number | null) => void;
+}) => {
+    if (!isOpen) return null;
 
-    const handleTranslate = async () => {
-        if (!sourceText.trim() || loading) return;
-        setLoading(true);
-        setError('');
-        try {
-            const prompt = `Traduza o seguinte texto do inglês para o português do Brasil com alta precisão, fluência e naturalidade. Retorne APENAS o texto traduzido final, sem explicações adicionais, rótulos ou aspas:\n\n${sourceText}`;
-            const response = await generateAIContent({ prompt });
-            setTranslatedText(response.trim());
-        } catch (e: any) {
-            setError(formatGeminiError(e, 'Falha ao traduzir o texto.'));
-        } finally {
-            setLoading(false);
+    const allBooks: any[] = useMemo(() => [
+        ...BIBLIA_STRUCTURE["Antigo Testamento"].col1,
+        ...BIBLIA_STRUCTURE["Antigo Testamento"].col2,
+        ...BIBLIA_STRUCTURE["Novo Testamento"].col1,
+        ...BIBLIA_STRUCTURE["Novo Testamento"].col2,
+    ], []);
+
+    const [tempBook, setTempBook] = useState<any>(selectedBook || allBooks[0]);
+    const [tempChapter, setTempChapter] = useState<number>(selectedChapter || 1);
+    const [tempVerse, setTempVerse] = useState<number | null>(selectedVerse || null);
+    const [filter, setFilter] = useState('');
+
+    const modalBookListRef = useRef<HTMLDivElement>(null);
+    const modalChapterGridRef = useRef<HTMLDivElement>(null);
+    const modalVerseGridRef = useRef<HTMLDivElement>(null);
+
+    // Initial scroll on mount/open
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            const activeB = modalBookListRef.current?.querySelector('.book-item.active') as HTMLElement;
+            if (activeB) activeB.scrollIntoView({ block: 'center' });
+            const activeC = modalChapterGridRef.current?.querySelector('.number-btn.active') as HTMLElement;
+            if (activeC) activeC.scrollIntoView({ block: 'center' });
+            const activeV = modalVerseGridRef.current?.querySelector('.number-btn.active') as HTMLElement;
+            if (activeV) activeV.scrollIntoView({ block: 'center' });
+        }, 80);
+        return () => clearTimeout(timer);
+    }, []);
+
+    const filteredBooks = useMemo(() => {
+        if (!filter.trim()) return allBooks;
+        const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const query = norm(filter.trim());
+        return allBooks.filter(b => norm(b.name).includes(query));
+    }, [allBooks, filter]);
+
+    const maxVerses = useMemo(() => {
+        if (!tempBook || !tempChapter) return 50;
+        if (tempBook.verses && tempBook.verses[tempChapter - 1]) {
+            return tempBook.verses[tempChapter - 1];
         }
+        return 50;
+    }, [tempBook, tempChapter]);
+
+    const handleSelectBook = (b: any) => {
+        setTempBook(b);
+        setTempChapter(1);
+        setTempVerse(null);
     };
 
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleTranslate();
-        }
+    const handleSelectChapter = (ch: number) => {
+        setTempChapter(ch);
+        setTempVerse(null);
     };
 
-    const handleCopy = () => {
-        if (!translatedText) return;
-        navigator.clipboard.writeText(translatedText);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+    const handleSelectVerse = (v: number) => {
+        setTempVerse(v);
+        onSelect(tempBook, tempChapter, v);
+        onClose();
     };
 
-    const handleClear = () => {
-        setSourceText('');
-        setTranslatedText('');
-        setError('');
+    const handleSelectWholeChapter = () => {
+        onSelect(tempBook, tempChapter, null);
+        onClose();
     };
 
     return (
-        <div style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem', height: '100%', boxSizing: 'border-box' }}>
-            {/* Direction Badge */}
-            <div style={{
+        <div 
+            onClick={onClose}
+            style={{
+                position: 'fixed',
+                top: 0, left: 0, right: 0, bottom: 0,
+                backgroundColor: 'rgba(0, 0, 0, 0.55)',
                 display: 'flex',
                 alignItems: 'center',
-                justify: 'space-between',
-                backgroundColor: '#e3f2fd',
-                border: '1px solid #90caf9',
-                borderRadius: '6px',
-                padding: '8px 14px',
-                fontWeight: 'bold',
-                fontSize: '0.85rem',
-                color: '#0d47a1',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-            }}>
-                <span>🇺🇸 Inglês</span>
-                <span style={{ fontSize: '1.1rem', color: '#1976d2' }}>➔</span>
-                <span>🇧🇷 Português (BR)</span>
-            </div>
-
-            {/* Input Area */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#616161' }}>
-                        TEXTO EM INGLÊS:
-                    </label>
-                    {sourceText && (
-                        <button
-                            onClick={handleClear}
-                            style={{ background: 'none', border: 'none', color: '#757575', cursor: 'pointer', fontSize: '0.75rem', textDecoration: 'underline' }}
-                        >
-                            Limpar
-                        </button>
-                    )}
-                </div>
-                <textarea
-                    value={sourceText}
-                    onChange={(e) => setSourceText(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Digite ou cole o texto em inglês... (Pressione ENTER para traduzir)"
-                    rows={5}
-                    style={{
-                        width: '100%',
-                        padding: '10px',
-                        borderRadius: '6px',
-                        border: '1px solid #cccccc',
-                        fontSize: '0.9rem',
-                        fontFamily: 'inherit',
-                        resize: 'vertical',
-                        outline: 'none',
-                        boxSizing: 'border-box'
-                    }}
-                />
-                <span style={{ fontSize: '0.72rem', color: '#757575', textAlign: 'right' }}>
-                    Pressione <strong>Enter</strong> para traduzir (Shift + Enter para nova linha)
-                </span>
-            </div>
-
-            {/* Action Button */}
-            <button
-                onClick={handleTranslate}
-                disabled={loading || !sourceText.trim()}
+                justifyContent: 'center',
+                zIndex: 99999,
+                padding: '16px'
+            }}
+        >
+            <div 
+                onClick={(e) => e.stopPropagation()}
                 style={{
-                    backgroundColor: loading || !sourceText.trim() ? '#b0bec5' : '#0d47a1',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '6px',
-                    padding: '10px 16px',
-                    fontSize: '0.9rem',
-                    fontWeight: 'bold',
-                    cursor: loading || !sourceText.trim() ? 'not-allowed' : 'pointer',
+                    backgroundColor: '#ffffff',
+                    borderRadius: '12px',
+                    width: '780px',
+                    maxWidth: '95vw',
+                    height: '560px',
+                    maxHeight: '90vh',
                     display: 'flex',
-                    alignItems: 'center',
-                    justify: 'center',
-                    gap: '8px',
-                    transition: 'background-color 0.2s',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                    flexDirection: 'column',
+                    boxShadow: '0 12px 36px rgba(0,0,0,0.25)',
+                    overflow: 'hidden',
+                    border: '1px solid #d0d7de'
                 }}
             >
-                {loading ? (
-                    <>⏳ Traduzindo...</>
-                ) : (
-                    <>🌐 Traduzir (ENTER)</>
-                )}
-            </button>
-
-            {/* Error Message */}
-            {error && <div className="error-message" style={{ margin: 0, padding: '8px', fontSize: '0.85rem' }}>{error}</div>}
-
-            {/* Output Area */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flexGrow: 1 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#0d47a1' }}>
-                        TRADUÇÃO (PORTUGUÊS BR):
-                    </label>
-                    {translatedText && (
-                        <button
-                            onClick={handleCopy}
-                            style={{
-                                backgroundColor: copied ? '#4caf50' : '#e3f2fd',
-                                color: copied ? 'white' : '#0d47a1',
-                                border: '1px solid #90caf9',
+                {/* Modal Header */}
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '12px 20px',
+                    backgroundColor: '#f8f9fa',
+                    borderBottom: '1px solid #e1e4e8'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span style={{ fontSize: '1.25rem' }}>📖</span>
+                        <h3 style={{ margin: 0, fontSize: '1.15rem', color: '#0d47a1', fontWeight: 'bold' }}>
+                            Selecionar Passagem Bíblica
+                        </h3>
+                        {tempBook && (
+                            <span style={{
+                                backgroundColor: '#e3f2fd',
+                                color: '#1565c0',
+                                padding: '3px 8px',
                                 borderRadius: '4px',
-                                padding: '2px 8px',
-                                fontSize: '0.75rem',
-                                fontWeight: 'bold',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s'
+                                fontSize: '0.85rem',
+                                fontWeight: 'bold'
+                            }}>
+                                {tempBook.name} {tempChapter}{tempVerse ? `:${tempVerse}` : ''}
+                            </span>
+                        )}
+                    </div>
+                    <button 
+                        onClick={onClose}
+                        style={{
+                            background: 'none',
+                            border: 'none',
+                            fontSize: '1.4rem',
+                            color: '#616161',
+                            cursor: 'pointer',
+                            padding: '4px 8px',
+                            lineHeight: 1
+                        }}
+                    >
+                        ✕
+                    </button>
+                </div>
+
+                {/* 3 Columns Body */}
+                <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1.8fr 1.1fr 1.3fr',
+                    flex: 1,
+                    minHeight: 0,
+                    backgroundColor: '#ffffff'
+                }}>
+                    {/* Coluna 1: LIVRO */}
+                    <div style={{ borderRight: '1px solid #e1e4e8', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                        <div style={{ padding: '8px 12px', borderBottom: '1px solid #eee', backgroundColor: '#fafbfc' }}>
+                            <div style={{ fontWeight: 'bold', fontSize: '0.8rem', color: '#555', marginBottom: '6px' }}>1. LIVRO</div>
+                            <input 
+                                type="text"
+                                placeholder="Filtrar livro..."
+                                value={filter}
+                                onChange={(e) => setFilter(e.target.value)}
+                                style={{
+                                    width: '100%',
+                                    padding: '5px 8px',
+                                    fontSize: '0.82rem',
+                                    borderRadius: '4px',
+                                    border: '1px solid #ccc',
+                                    boxSizing: 'border-box'
+                                }}
+                            />
+                        </div>
+                        <div ref={modalBookListRef} style={{ flex: 1, overflowY: 'auto', padding: '6px' }}>
+                            {filteredBooks.map(b => (
+                                <div
+                                    key={b.name}
+                                    onClick={() => handleSelectBook(b)}
+                                    style={{
+                                        padding: '7px 10px',
+                                        borderRadius: '4px',
+                                        fontSize: '0.88rem',
+                                        cursor: 'pointer',
+                                        fontWeight: tempBook?.name === b.name ? 'bold' : 'normal',
+                                        backgroundColor: tempBook?.name === b.name ? '#1976d2' : 'transparent',
+                                        color: tempBook?.name === b.name ? '#ffffff' : '#212121',
+                                        marginBottom: '2px',
+                                        transition: 'all 0.15s ease'
+                                    }}
+                                    className={`book-item ${tempBook?.name === b.name ? 'active' : ''}`}
+                                >
+                                    {b.name}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Coluna 2: CAPÍTULO */}
+                    <div style={{ borderRight: '1px solid #e1e4e8', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                        <div style={{ padding: '12px', borderBottom: '1px solid #eee', backgroundColor: '#fafbfc' }}>
+                            <div style={{ fontWeight: 'bold', fontSize: '0.8rem', color: '#555' }}>
+                                2. CAPÍTULO ({tempBook ? tempBook.chapters : 0})
+                            </div>
+                        </div>
+                        <div ref={modalChapterGridRef} style={{ flex: 1, overflowY: 'auto', padding: '10px' }}>
+                            <div style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fill, minmax(36px, 1fr))',
+                                gap: '6px'
+                            }}>
+                                {tempBook ? Array.from({ length: tempBook.chapters }, (_, i) => i + 1).map(ch => (
+                                    <button
+                                        key={ch}
+                                        onClick={() => handleSelectChapter(ch)}
+                                        className={`number-btn ${tempChapter === ch ? 'active' : ''}`}
+                                        style={{
+                                            padding: '8px 0',
+                                            fontSize: '0.85rem',
+                                            fontWeight: tempChapter === ch ? 'bold' : 'normal',
+                                            backgroundColor: tempChapter === ch ? '#1976d2' : '#f0f4f8',
+                                            color: tempChapter === ch ? '#ffffff' : '#333333',
+                                            border: '1px solid',
+                                            borderColor: tempChapter === ch ? '#1565c0' : '#d0d7de',
+                                            borderRadius: '4px',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                    >
+                                        {ch}
+                                    </button>
+                                )) : null}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Coluna 3: VERSÍCULO */}
+                    <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                        <div style={{ padding: '12px', borderBottom: '1px solid #eee', backgroundColor: '#fafbfc' }}>
+                            <div style={{ fontWeight: 'bold', fontSize: '0.8rem', color: '#555' }}>
+                                3. VERSÍCULO ({maxVerses})
+                            </div>
+                        </div>
+                        <div ref={modalVerseGridRef} style={{ flex: 1, overflowY: 'auto', padding: '10px' }}>
+                            <div style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fill, minmax(36px, 1fr))',
+                                gap: '6px'
+                            }}>
+                                {Array.from({ length: maxVerses }, (_, i) => i + 1).map(v => (
+                                    <button
+                                        key={v}
+                                        onClick={() => handleSelectVerse(v)}
+                                        className={`number-btn ${tempVerse === v ? 'active' : ''}`}
+                                        style={{
+                                            padding: '8px 0',
+                                            fontSize: '0.85rem',
+                                            fontWeight: tempVerse === v ? 'bold' : 'normal',
+                                            backgroundColor: tempVerse === v ? '#1976d2' : '#f0f4f8',
+                                            color: tempVerse === v ? '#ffffff' : '#333333',
+                                            border: '1px solid',
+                                            borderColor: tempVerse === v ? '#1565c0' : '#d0d7de',
+                                            borderRadius: '4px',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                    >
+                                        {v}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Modal Footer */}
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '10px 16px',
+                    backgroundColor: '#f8f9fa',
+                    borderTop: '1px solid #e1e4e8'
+                }}>
+                    <button
+                        onClick={handleSelectWholeChapter}
+                        style={{
+                            backgroundColor: '#e3f2fd',
+                            color: '#0d47a1',
+                            border: '1px solid #90caf9',
+                            borderRadius: '4px',
+                            padding: '6px 14px',
+                            fontSize: '0.85rem',
+                            fontWeight: 'bold',
+                            cursor: 'pointer'
+                        }}
+                    >
+                        Ler Capítulo Inteiro ({tempBook?.name} {tempChapter})
+                    </button>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                            onClick={onClose}
+                            style={{
+                                backgroundColor: '#ffffff',
+                                color: '#555555',
+                                border: '1px solid #ccc',
+                                borderRadius: '4px',
+                                padding: '6px 14px',
+                                fontSize: '0.85rem',
+                                cursor: 'pointer'
                             }}
                         >
-                            {copied ? '✓ Copiado!' : '📋 Copiar'}
+                            Cancelar
                         </button>
-                    )}
-                </div>
-                <div style={{
-                    minHeight: '120px',
-                    backgroundColor: '#f8f9fa',
-                    border: '1px solid #e0e0e0',
-                    borderRadius: '6px',
-                    padding: '10px',
-                    fontSize: '0.9rem',
-                    lineHeight: '1.5',
-                    color: translatedText ? '#212121' : '#9e9e9e',
-                    whiteSpace: 'pre-wrap',
-                    overflowY: 'auto'
-                }}>
-                    {translatedText || (loading ? 'Processando tradução...' : 'A tradução aparecerá aqui...')}
+                        <button
+                            onClick={() => {
+                                onSelect(tempBook, tempChapter, tempVerse);
+                                onClose();
+                            }}
+                            style={{
+                                backgroundColor: '#1976d2',
+                                color: '#ffffff',
+                                border: 'none',
+                                borderRadius: '4px',
+                                padding: '6px 18px',
+                                fontSize: '0.85rem',
+                                fontWeight: 'bold',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            Confirmar
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -4517,7 +4885,6 @@ const RightSidebar = ({ selectedBook, selectedChapter, selectedVerse }) => {
             <div className="analysis-tabs">
                 <div style={{ flex: 1, textAlign: 'center' }} className={`analysis-tab ${activeTab === 'Pensamentos' ? 'active' : ''}`} onClick={() => setActiveTab('Pensamentos')}>Pensamentos</div>
                 <div style={{ flex: 1, textAlign: 'center' }} className={`analysis-tab ${activeTab === 'Ilustrações' ? 'active' : ''}`} onClick={() => setActiveTab('Ilustrações')}>Ilustrações</div>
-                <div style={{ flex: 1, textAlign: 'center' }} className={`analysis-tab ${activeTab === 'Tradutor' ? 'active' : ''}`} onClick={() => setActiveTab('Tradutor')}>Tradutor</div>
             </div>
             <div style={{ padding: '0', flex: 1, minHeight: 0, overflowY: 'auto' }} className="embedded-view">
                 <div style={{ display: activeTab === 'Pensamentos' ? 'block' : 'none' }}>
@@ -4525,9 +4892,6 @@ const RightSidebar = ({ selectedBook, selectedChapter, selectedVerse }) => {
                 </div>
                 <div style={{ display: activeTab === 'Ilustrações' ? 'block' : 'none' }}>
                     <IlustracoesView />
-                </div>
-                <div style={{ display: activeTab === 'Tradutor' ? 'block' : 'none' }}>
-                    <TradutorView />
                 </div>
             </div>
         </div>
@@ -4547,6 +4911,8 @@ const App = () => {
         const stored = localStorage.getItem('selectedVerse');
         return stored ? JSON.parse(stored) : 1;
     });
+
+    const [showRefModal, setShowRefModal] = useState(false);
 
     useEffect(() => {
         if (selectedBook) localStorage.setItem('selectedBook', JSON.stringify(selectedBook));
@@ -4623,9 +4989,33 @@ const App = () => {
                     <h1>Redator Bíblia</h1>
                 </div>
                 <div>
-                    <h2 style={{ fontSize: '1.2rem', fontWeight: 'bold', margin: 0 }}>
-                        {selectedBook ? `${selectedBook.name} ${selectedChapter || ''}${selectedVerse ? ':'+selectedVerse : ''}` : ''}
-                    </h2>
+                    <button
+                        onClick={() => setShowRefModal(true)}
+                        style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            backgroundColor: 'transparent',
+                            border: 'none',
+                            color: '#212121',
+                            padding: '4px 6px',
+                            borderRadius: '4px',
+                            fontSize: '1.2rem',
+                            fontWeight: 'bold',
+                            cursor: 'pointer',
+                            transition: 'color 0.15s ease'
+                        }}
+                        onMouseOver={(e) => {
+                            e.currentTarget.style.color = '#0d47a1';
+                            e.currentTarget.style.textDecoration = 'underline';
+                        }}
+                        onMouseOut={(e) => {
+                            e.currentTarget.style.color = '#212121';
+                            e.currentTarget.style.textDecoration = 'none';
+                        }}
+                        title="Clique para selecionar livro, capítulo e versículo"
+                    >
+                        <span>{selectedBook ? `${selectedBook.name} ${selectedChapter || ''}${selectedVerse ? ':' + selectedVerse : ''}` : 'Selecionar passagem'}</span>
+                    </button>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
                     <button
@@ -4659,6 +5049,21 @@ const App = () => {
                     </button>
                 </div>
             </header>
+
+            {showRefModal && (
+                <BibleReferencePickerModal
+                    isOpen={showRefModal}
+                    onClose={() => setShowRefModal(false)}
+                    selectedBook={selectedBook}
+                    selectedChapter={selectedChapter}
+                    selectedVerse={selectedVerse}
+                    onSelect={(book, chap, v) => {
+                        setSelectedBook(book);
+                        setSelectedChapter(chap);
+                        setSelectedVerse(v);
+                    }}
+                />
+            )}
 
 
             {showSettings && (

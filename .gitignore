@@ -13,7 +13,19 @@ dist-ssr
 *.local
 naa.md
 scratch_*
+scratch/
 test.mjs
+
+# Raw commentary dumps
+traducoes/*_en.json
+!traducoes/comentarios_resumo_dos_capitulos_en.json
+traducoes/*.csv
+traducoes/*.sql
+traducoes/andrews_study_bible_comentarios.json
+traducoes/comentarios_coment_rio_adventista_en.json
+traducoes/comentarios_resumo_dos_capitulos_en_clean.json
+traducoes/Abrir_Tradutor.bat
+
 
 # Editor directories and files
 .vscode/*

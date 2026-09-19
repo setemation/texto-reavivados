@@ -1,4 +1,4 @@
-﻿import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI } from '@google/genai';
 import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
@@ -32,20 +32,20 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Chaves ativas (Chaves 2, 3 e 4 estão operacionais com cota gratuita ativa)
-const RAW_KEYS = [
-    'QVEuQWI4Uk42TGRoeGxRVEwycnhWZTR5dUxfc3Q2blAtTXZINEdtYTlDY2FHRi0wUDVMb1E=', // IASD Marco
-    'QVEuQWI4Uk42S3pmUG9hdGlTcVZVS3dWbjIyZndBVmU4V3ZoNWkzalRvQnp2eHBfVmlJY0E=', // Pessoal
-    'QVEuQWI4Uk42SlVIWW84Wlk4SzB2UGs2OFh6TTFwYzV0ekI5cUFXUkloRW4wZmJFTHVRWHc='  // Jozy
+// Workers configurados com chaves ativas e modelos compatíveis
+const WORKER_CONFIGS = [
+    { name: 'IASD Marco', key: Buffer.from('QVEuQWI4Uk42TGRoeGxRVEwycnhWZTR5dUxfc3Q2blAtTXZINEdtYTlDY2FHRi0wUDVMb1E=', 'base64').toString('utf-8'), models: ['gemini-2.5-flash', 'gemini-3.6-flash'] },
+    { name: 'Pessoal', key: Buffer.from('QVEuQWI4Uk42S3pmUG9hdGlTcVZVS3dWbjIyZndBVmU4V3ZoNWkzalRvQnp2eHBfVmlJY0E=', 'base64').toString('utf-8'), models: ['gemini-2.5-flash', 'gemini-3.6-flash'] },
+    { name: 'Jozy', key: Buffer.from('QVEuQWI4Uk42SlVIWW84Wlk4SzB2UGs2OFh6TTFwYzV0ekI5cUFXUkloRW4wZmJFTHVRWHc=', 'base64').toString('utf-8'), models: ['gemini-3.6-flash'] }
 ];
 
-const API_KEYS = RAW_KEYS.map(k => Buffer.from(k, 'base64').toString('utf-8'));
-const NUM_WORKERS = API_KEYS.length;
+const NUM_WORKERS = WORKER_CONFIGS.length;
 
 const EN_JSON_PATH = path.resolve(process.cwd(), 'traducoes', 'comentarios_clarke_en.json');
 const CACHE_PATH = path.resolve(process.cwd(), 'traducoes', 'clarke_pt_cache.json');
 const PT_JSON_PATH = path.resolve(process.cwd(), 'traducoes', 'comentarios_clarke_pt.json');
 const PUBLIC_PT_JSON_PATH = path.resolve(process.cwd(), 'public', 'traducoes', 'comentarios_clarke_pt.json');
+const CHECKPOINT_PATH = path.resolve(process.cwd(), 'traducoes', 'clarke_checkpoint.json');
 
 function cleanCommentText(text) {
     if (!text) return '';
@@ -114,8 +114,31 @@ async function runParallelClarkeTranslation() {
                 }));
             fs.writeFileSync(PT_JSON_PATH, JSON.stringify(ptData, null, 2), 'utf8');
             fs.writeFileSync(PUBLIC_PT_JSON_PATH, JSON.stringify(ptData, null, 2), 'utf8');
+
+            const currentPending = allData.filter(d => !cache[d.id]);
+            const translatedCount = Object.keys(cache).length;
+            const booksSummary = {};
+            ptData.forEach(d => {
+                booksSummary[d.book] = (booksSummary[d.book] || 0) + 1;
+            });
+
+            const checkpoint = {
+                timestamp: new Date().toISOString(),
+                totalCommentaries: allData.length,
+                translatedCount,
+                pendingCount: currentPending.length,
+                percentage: `${((translatedCount / allData.length) * 100).toFixed(2)}%`,
+                nextItemToTranslate: currentPending[0] ? {
+                    id: currentPending[0].id,
+                    book: currentPending[0].book,
+                    chapter: currentPending[0].chapter,
+                    verse: currentPending[0].verse
+                } : null,
+                booksSummary
+            };
+            fs.writeFileSync(CHECKPOINT_PATH, JSON.stringify(checkpoint, null, 2), 'utf8');
         } catch (e) {
-            console.error('⚠️ Erro ao salvar cache:', e.message);
+            console.error('⚠️ Erro ao salvar cache e checkpoint:', e.message);
         }
     };
 
@@ -143,8 +166,8 @@ async function runParallelClarkeTranslation() {
     };
 
     const worker = async (workerId) => {
-        const apiKey = API_KEYS[workerId];
-        const ai = new GoogleGenAI({ apiKey });
+        const cfg = WORKER_CONFIGS[workerId];
+        const ai = new GoogleGenAI({ apiKey: cfg.key });
 
         while (true) {
             if (batchIndex >= batches.length) break;
@@ -171,42 +194,50 @@ ${JSON.stringify(inputBatch, null, 2)}`;
 
             let translated = false;
 
-            for (let attempt = 1; attempt <= 5; attempt++) {
-                try {
-                    const response = await ai.models.generateContent({
-                        model: 'gemini-3.6-flash',
-                        contents: prompt,
-                        config: { responseMimeType: "application/json" }
-                    });
+            for (const model of cfg.models) {
+                if (translated) break;
+                for (let attempt = 1; attempt <= 3; attempt++) {
+                    try {
+                        const response = await ai.models.generateContent({
+                            model,
+                            contents: prompt,
+                            config: { responseMimeType: "application/json" }
+                        });
 
-                    const rawText = response.text ? response.text.trim() : '';
-                    if (rawText) {
-                        const cleanJson = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-                        const parsed = JSON.parse(cleanJson);
-                        if (Array.isArray(parsed)) {
-                            for (const item of parsed) {
-                                if (item && item.id && item.text) {
-                                    cache[item.id] = item.text.trim();
+                        const rawText = response.text ? response.text.trim() : '';
+                        if (rawText) {
+                            const cleanJson = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+                            const parsed = JSON.parse(cleanJson);
+                            if (Array.isArray(parsed)) {
+                                for (const item of parsed) {
+                                    if (item && item.id && item.text) {
+                                        cache[item.id] = item.text.trim();
+                                    }
                                 }
-                            }
-                            for (const it of batch) {
-                                if (cache[it.id]) {
-                                    supabaseBuffer.push(it);
+                                for (const it of batch) {
+                                    if (cache[it.id]) {
+                                        supabaseBuffer.push(it);
+                                    }
                                 }
+                                completedItems += batch.length;
+                                translated = true;
+                                break;
                             }
-                            completedItems += batch.length;
-                            translated = true;
-                            break;
                         }
-                    }
-                } catch (e) {
-                    const msg = e.message || String(e);
-                    if (msg.includes('429') || msg.includes('Quota')) {
-                        // Aguardar reset da janela de cota por minuto
-                        console.log(`\n⏳ [W${workerId + 1}] Cota por minuto atingida. Aguardando 30s para retomar...`);
-                        await new Promise(r => setTimeout(r, 30000));
-                    } else {
-                        await new Promise(r => setTimeout(r, 3000));
+                    } catch (e) {
+                        const msg = e.message || String(e);
+                        if (msg.includes('404')) {
+                            break; // Modelo não suportado para esta chave, tenta próximo modelo
+                        }
+                        if (msg.includes('429') || msg.includes('Quota')) {
+                            console.log(`\n⏳ [W${workerId + 1} - ${cfg.name}] Cota atingida. Aguardando 25s para retomar...`);
+                            await new Promise(r => setTimeout(r, 25000));
+                        } else if (msg.includes('503') || msg.includes('overloaded') || msg.includes('500') || msg.includes('fetch failed')) {
+                            console.log(`\n⚠️ [W${workerId + 1} - ${cfg.name}] Modelo ${model} instável. Tentativa ${attempt}/3 em ${attempt * 3}s...`);
+                            await new Promise(r => setTimeout(r, attempt * 3000));
+                        } else {
+                            await new Promise(r => setTimeout(r, 3000));
+                        }
                     }
                 }
             }
@@ -216,7 +247,7 @@ ${JSON.stringify(inputBatch, null, 2)}`;
                 batches.push(batch);
             } else {
                 const pct = ((completedItems / allData.length) * 100).toFixed(1);
-                console.log(`[W${workerId + 1}] [${completedItems}/${allData.length} - ${pct}%] ${batch[0].book} ${batch[0].chapter}`);
+                console.log(`[W${workerId + 1} - ${cfg.name}] [${completedItems}/${allData.length} - ${pct}%] ${batch[0].book} ${batch[0].chapter}:${batch[0].verse}`);
 
                 if (supabaseBuffer.length >= 30) {
                     await flushSupabase();
@@ -227,7 +258,7 @@ ${JSON.stringify(inputBatch, null, 2)}`;
                 }
             }
 
-            // Pacing de 2.5s por worker para respeitar suavemente o limite de 15-20 RPM
+            // Pacing de 2.5s por worker para respeitar o limite de RPM
             await new Promise(r => setTimeout(r, 2500));
         }
     };
