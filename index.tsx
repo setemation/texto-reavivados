@@ -466,6 +466,42 @@ const generateAIContent = async ({ prompt, isJson = false, config }: { prompt: s
         }
         const data = await res.json();
         return data.response;
+    } else if (provider === 'deepseek') {
+        const apiKey = localStorage.getItem('deepseek_api_key');
+        if (!apiKey) {
+            throw new Error('Informe sua chave de API DeepSeek nas configurações do provedor.');
+        }
+        const model = localStorage.getItem('deepseek_model') || 'deepseek-chat';
+        const systemPrompt = config?.systemInstruction
+            ? `${PT_BR_SYSTEM_INSTRUCTION}\n\n${config.systemInstruction}`
+            : PT_BR_SYSTEM_INSTRUCTION;
+        const requestConfig: any = {
+            model,
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: prompt }
+            ]
+        };
+        if (config?.temperature !== undefined) {
+            requestConfig.temperature = config.temperature;
+        }
+        if (isJson) {
+            requestConfig.response_format = { type: 'json_object' };
+        }
+
+        const res = await fetch('https://api.deepseek.com/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify(requestConfig)
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            throw new Error(data?.error?.message || `DeepSeek respondeu com erro ${res.status}.`);
+        }
+        return data?.choices?.[0]?.message?.content || '';
     } else {
         let attempts = 0;
         const totalKeys = GEMINI_KEYS.length;
@@ -837,7 +873,6 @@ const getBookVariants = (rawBook: string): string[] => {
 };
 
 const fetchCommentaries = async (refStr: string): Promise<any[]> => {
-    if (!isSupabaseConfigured()) return [];
     try {
         const match = refStr.trim().match(/^(.+?)\s+(\d+):?(.*)$/);
         if (!match) return [];
@@ -845,19 +880,70 @@ const fetchCommentaries = async (refStr: string): Promise<any[]> => {
         const chapter = parseInt(match[2], 10);
         const bookVariants = getBookVariants(book);
         
-        const { data, error } = await supabase
-            .from('commentaries')
-            .select('author, text, verse')
-            .in('book', bookVariants)
-            .eq('chapter', chapter)
-            .neq('author', 'Resumo dos Capítulos')
-            .order('id', { ascending: true });
-            
-        if (error) {
-            console.error('Erro ao buscar comentários do Supabase:', error);
-            return [];
+        let dbList: any[] = [];
+        if (isSupabaseConfigured()) {
+            const { data, error } = await supabase
+                .from('commentaries')
+                .select('id, author, text, verse, book, chapter')
+                .in('book', bookVariants)
+                .eq('chapter', chapter)
+                .neq('author', 'Resumo dos Capítulos')
+                .order('id', { ascending: true });
+                
+            if (error) {
+                console.error('Erro ao buscar comentários do Supabase:', error);
+            } else if (data) {
+                dbList = data;
+            }
         }
-        return data || [];
+
+        // Buscar comentários locais (ex: das pastas Dados/Obras-Pt e Dados/Obras-En)
+        let localList: any[] = [];
+        try {
+            const localRes = await fetch(`/api/local-commentaries?book=${encodeURIComponent(book)}&chapter=${chapter}`);
+            if (localRes.ok) {
+                const localJson = await localRes.json();
+                if (localJson.data && Array.isArray(localJson.data)) {
+                    localList = localJson.data;
+                }
+            }
+        } catch (e) {
+            // Falha silenciosa no fallback
+        }
+
+        const processedDbList = dbList.map(c => {
+            // Apenas o comentário legado 'Comentário Adventista' do Supabase é Pt por padrão
+            const isPt = c.lang === 'pt' || c.author === 'Comentário Adventista' || (c.author || '').endsWith('Pt');
+            const lang: 'pt' | 'en' = isPt ? 'pt' : 'en';
+            return {
+                ...c,
+                lang,
+                authorKey: `${c.author} ${isPt ? 'Pt' : 'En'}`
+            };
+        });
+
+        const processedLocalList = localList.map(c => {
+            const isPt = c.lang === 'pt' || (c.authorKey && c.authorKey.endsWith('Pt')) || (c.author === 'Comentário Adventista' && c.lang !== 'en');
+            const lang: 'pt' | 'en' = isPt ? 'pt' : 'en';
+            return {
+                ...c,
+                lang,
+                authorKey: c.authorKey || `${c.author} ${isPt ? 'Pt' : 'En'}`
+            };
+        });
+
+        // Mesclar deduplicando por autor, capítulo, versículo e início do texto
+        const seen = new Set<string>();
+        const combined: any[] = [];
+        for (const c of [...processedLocalList, ...processedDbList]) {
+            const uniqueKey = `${(c.author || '').toLowerCase()}|${c.chapter}|${c.verse ?? 0}|${(c.text || '').substring(0, 30)}`;
+            if (!seen.has(uniqueKey)) {
+                seen.add(uniqueKey);
+                combined.push(c);
+            }
+        }
+
+        return combined;
     } catch (e) {
         console.error('Erro ao buscar comentários:', e);
         return [];
@@ -893,19 +979,43 @@ const fetchChapterSummary = async (refStr: string): Promise<string | null> => {
 
     // Local JSON fallback
     try {
-        const res = await fetch('/traducoes/comentarios_resumo_dos_capitulos_en.json');
+        const res = await fetch('/api/local-commentaries?book=' + encodeURIComponent(rawBook) + '&chapter=' + chapter);
         if (res.ok) {
             const json = await res.json();
-            const found = json.find((item: any) => 
-                bookVariants.includes(item.book) && item.chapter === chapter
-            );
-            if (found && found.text) return found.text;
+            if (json.data && Array.isArray(json.data)) {
+                const found = json.data.find((item: any) => 
+                    item.author === 'Resumo dos Capítulos' || (item.author || '').toLowerCase().includes('resumo')
+                );
+                if (found && found.text) return found.text;
+            }
         }
     } catch (e) {
         // Silently fail fallback
     }
 
     return null;
+};
+
+// Sumário por capítulo (Bíblia Sumarizada) - exibido antes do resumo atual na aba Capítulo.
+const fetchBibliaSumarizada = async (refStr: string): Promise<string | null> => {
+    if (!refStr) return null;
+    const match = refStr.trim().match(/^(.+?)\s+(\d+)/);
+    if (!match) return null;
+    const rawBook = match[1].trim();
+    const chapter = parseInt(match[2], 10);
+    const params = getBookVariants(rawBook)
+        .map((v) => 'book=' + encodeURIComponent(v))
+        .join('&');
+
+    try {
+        const res = await fetch(`/api/biblia-sumarizada?${params}&chapter=${chapter}`);
+        if (!res.ok) return null;
+        const json = await res.json();
+        return json && json.text ? json.text : null;
+    } catch (e) {
+        // Silently fail
+        return null;
+    }
 };
 
 
@@ -1953,9 +2063,80 @@ const renderFormattedSummary = (text: string) => {
     return <div className="formatted-summary-content">{elements}</div>;
 };
 
+// Rótulos da Bíblia Sumarizada que devem aparecer em negrito.
+// A comparação é normalizada (sem acentos/espaços/hífen) e tolera variações de grafia entre os arquivos.
+const SUMARIZADA_BOLD_PREFIXES = ['conteudo', 'personage', 'conclus', 'palavra', 'vers', 'fato'];
+const SUMARIZADA_BOLD_SUFFIXES = ['forte', 'fortes', 'destacado', 'destacados'];
+
+const normalizeSumarizadaLabel = (label: string) =>
+    (label || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z]/g, '');
+
+const isSumarizadaBoldLabel = (label: string) => {
+    const normalized = normalizeSumarizadaLabel(label);
+    if (!normalized) return false;
+    if (SUMARIZADA_BOLD_PREFIXES.some((prefix) => normalized.startsWith(prefix))) return true;
+    return SUMARIZADA_BOLD_SUFFIXES.some((suffix) => normalized.endsWith(suffix));
+};
+
+const renderSumarizadaContent = (text: string) => {
+    if (!text) return null;
+
+    const lines = text.split('\n');
+    const elements: React.ReactNode[] = [];
+    let keyIdx = 0;
+
+    lines.forEach((line) => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+
+        // RESUMO e CAPÍTULO X: negrito e azul
+        if (/^RESUMO$/i.test(trimmed)) {
+            elements.push(
+                <p key={`sum-resumo-${keyIdx++}`} style={{ fontWeight: 'bold', color: '#0d47a1', marginBottom: '0.5rem' }}>
+                    {trimmed}
+                </p>
+            );
+            return;
+        }
+
+        if (/^CAP[IÍ]TULO\b/i.test(trimmed)) {
+            elements.push(
+                <h3 key={`sum-cap-${keyIdx++}`} style={{ fontSize: '1.05rem', fontWeight: 'bold', color: '#0d47a1', marginTop: '0.25rem', marginBottom: '0.75rem' }}>
+                    {trimmed}
+                </h3>
+            );
+            return;
+        }
+
+        // Rótulos em negrito (apenas o rótulo, antes dos dois-pontos)
+        const labelMatch = trimmed.match(/^([^:]{1,40}):\s*(.*)$/);
+        if (labelMatch && isSumarizadaBoldLabel(labelMatch[1])) {
+            elements.push(
+                <p key={`sum-label-${keyIdx++}`} style={{ marginBottom: '0.8rem', lineHeight: '1.6', color: '#333' }}>
+                    <strong>{labelMatch[1].trim()}:</strong> {parseBold(labelMatch[2])}
+                </p>
+            );
+            return;
+        }
+
+        elements.push(
+            <p key={`sum-p-${keyIdx++}`} style={{ marginBottom: '0.8rem', lineHeight: '1.6', color: '#333' }}>
+                {parseBold(trimmed)}
+            </p>
+        );
+    });
+
+    return <div className="sumarizada-content">{elements}</div>;
+};
+
 const CapituloView = ({ externalRef, fullRef }: { externalRef: string; fullRef?: string }) => {
     const [ref, setRef] = useState('');
     const [summary, setSummary] = useState<string | null>(null);
+    const [sumarizada, setSumarizada] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [fullTextModal, setFullTextModal] = useState({ show: false, text: '', title: '' });
@@ -1975,12 +2156,16 @@ const CapituloView = ({ externalRef, fullRef }: { externalRef: string; fullRef?:
         setLoading(true);
         setError('');
         setSummary(null);
+        setSumarizada(null);
 
         try {
-            const data = await fetchChapterSummary(targetRef);
-            if (data) {
-                setSummary(data);
-            } else {
+            const [data, sumarizadaData] = await Promise.all([
+                fetchChapterSummary(targetRef),
+                fetchBibliaSumarizada(targetRef)
+            ]);
+            setSummary(data);
+            setSumarizada(sumarizadaData);
+            if (!data && !sumarizadaData) {
                 setError(`Resumo do capítulo não encontrado no banco de dados para ${targetRef}.`);
             }
         } catch (e: any) {
@@ -2100,9 +2285,13 @@ Retorne um texto bem formatado em Markdown com títulos curtos.`;
             {loading && <LoadingSpinner />}
             {error && <ErrorMessage message={error} />}
 
-            {summary && (
+            {(sumarizada || summary) && (
                 <div className="card" style={{ padding: '20px', backgroundColor: '#ffffff', borderRadius: '8px', border: '1px solid #e0e0e0', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-                    {renderFormattedSummary(summary)}
+                    {sumarizada && renderSumarizadaContent(sumarizada)}
+                    {sumarizada && summary && (
+                        <hr style={{ border: 'none', borderTop: '1px solid #cfcfcf', width: '80px', margin: '1.5rem auto' }} />
+                    )}
+                    {summary && renderFormattedSummary(summary)}
                 </div>
             )}
 
@@ -3511,7 +3700,7 @@ const CenterContent = ({ selectedBook, selectedChapter, selectedVerse }) => {
     // Commentaries State
     const [comentarios, setComentarios] = useState([]);
     const [loadingComentarios, setLoadingComentarios] = useState(false);
-    const [selectedCommentaries, setSelectedCommentaries] = useState({ 'Todos': true });
+    const [selectedCommentaries, setSelectedCommentaries] = useState<Record<string, boolean>>({ 'Todos Pt': true });
     const [isRefsMenuOpen, setIsRefsMenuOpen] = useState(false);
 
     // Original Interlinear State
@@ -3741,8 +3930,8 @@ const CenterContent = ({ selectedBook, selectedChapter, selectedVerse }) => {
                         : `${selectedBook.name} ${selectedChapter}`;
                     const res = await fetchCommentaries(targetRefForDb);
                     setComentarios(res);
-                    // Reset checkboxes
-                    setSelectedCommentaries({ 'Todos': true });
+                    // Reset checkboxes - Padrão: Todos Pt
+                    setSelectedCommentaries({ 'Todos Pt': true });
                 } catch (e) {
                     console.error('Erro ao buscar comentários', e);
                 } finally {
@@ -3785,16 +3974,24 @@ const CenterContent = ({ selectedBook, selectedChapter, selectedVerse }) => {
         }
     }, [activeTab, externalRefChapter, selectedBook]);
 
-    const handleCommentaryCheck = (author) => {
-        if (author === 'Todos') {
+    const handleCommentaryCheck = (key: string) => {
+        if (key === 'Todos') {
             setSelectedCommentaries({ 'Todos': true });
+        } else if (key === 'Todos Pt') {
+            setSelectedCommentaries({ 'Todos Pt': true });
+        } else if (key === 'Todos En') {
+            setSelectedCommentaries({ 'Todos En': true });
         } else {
             setSelectedCommentaries(prev => {
-                const next = { ...prev, [author]: !prev[author] };
-                if (next['Todos']) next['Todos'] = false;
-                // Se tudo desmarcado, marca Todos automaticamente? (Opção de design)
-                const anyChecked = Object.keys(next).some(k => k !== 'Todos' && next[k]);
-                if (!anyChecked) next['Todos'] = true;
+                let next = { ...prev };
+                if (prev['Todos'] || prev['Todos Pt'] || prev['Todos En']) {
+                    return { [key]: true };
+                }
+                next[key] = !prev[key];
+                const anyChecked = Object.keys(next).some(k => next[k]);
+                if (!anyChecked) {
+                    return { 'Todos Pt': true };
+                }
                 return next;
             });
         }
@@ -3856,22 +4053,55 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
     const displayTitle = selectedBook ? `${selectedBook.name} ${selectedChapter || ''}${selectedVerse ? ':'+selectedVerse : ''}` : 'Selecione um texto bíblico no painel lateral';
 
     // Get active comments
-    let activeCommentaries = comentarios.filter(c => selectedCommentaries['Todos'] || selectedCommentaries[c.author]);
+    // As seleções se somam (OR): "Todos Pt"/"Todos En" marcam o idioma inteiro e uma
+    // obra específica pode estar marcada junto.
+    let activeCommentaries = comentarios.filter((c: any) => {
+        if (selectedCommentaries['Todos']) return true;
+        const key = c.authorKey || `${c.author} ${c.lang === 'pt' ? 'Pt' : 'En'}`;
+        if (selectedCommentaries[key]) return true;
+        if (selectedCommentaries['Todos Pt'] && c.lang === 'pt') return true;
+        if (selectedCommentaries['Todos En'] && c.lang === 'en') return true;
+        return false;
+    });
     
     // Filtro por versículo (Exibe o versículo selecionado, ou todos os versos do capítulo se nenhum verso for selecionado)
     if (selectedVerse) {
-        activeCommentaries = activeCommentaries.filter(c => String(c.verse) === String(selectedVerse));
+        activeCommentaries = activeCommentaries.filter((c: any) =>
+            String(c.verse) === String(selectedVerse)
+        );
     }
     
-    const PRIORITY_AUTHORS = ['Andrews Study Bible'];
-    const authors = Array.from(new Set<string>(comentarios.map((c: any) => c.author as string))).sort((a, b) => {
-        const ai = PRIORITY_AUTHORS.indexOf(a);
-        const bi = PRIORITY_AUTHORS.indexOf(b);
-        if (ai !== -1 && bi === -1) return -1;
-        if (ai === -1 && bi !== -1) return 1;
-        if (ai !== -1 && bi !== -1) return ai - bi;
-        return 0;
-    });
+    interface AuthorRef {
+        key: string;
+        author: string;
+        lang: 'pt' | 'en';
+    }
+
+    const authorRefs = useMemo<AuthorRef[]>(() => {
+        const map = new Map<string, AuthorRef>();
+        comentarios.forEach((c: any) => {
+            const isPt = c.lang === 'pt' || (c.authorKey && c.authorKey.endsWith('Pt')) || (c.author === 'Comentário Adventista' && c.lang !== 'en');
+            const lang: 'pt' | 'en' = isPt ? 'pt' : 'en';
+            const key = c.authorKey || `${c.author} ${lang === 'pt' ? 'Pt' : 'En'}`;
+            if (!map.has(key)) {
+                map.set(key, {
+                    key,
+                    author: c.author,
+                    lang
+                });
+            }
+        });
+
+        return Array.from(map.values()).sort((a, b) => {
+            // Comentários em Português primeiro
+            if (a.lang === 'pt' && b.lang === 'en') return -1;
+            if (a.lang === 'en' && b.lang === 'pt') return 1;
+            // Prioridade para Andrews Study Bible se for inglês
+            if (a.author === 'Andrews Study Bible' && b.author !== 'Andrews Study Bible') return -1;
+            if (a.author !== 'Andrews Study Bible' && b.author === 'Andrews Study Bible') return 1;
+            return a.author.localeCompare(b.author, 'pt-BR');
+        });
+    }, [comentarios]);
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '1rem', position: 'relative' }}>
@@ -4160,14 +4390,28 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
                                                     
                                                     {isRefsMenuOpen && (
                                                         <div style={{ position: 'absolute', top: '100%', left: 0, width: '100%', backgroundColor: '#fff', border: '1px solid #d0e2f7', borderRadius: '8px', marginTop: '5px', boxShadow: '0 4px 8px rgba(0,0,0,0.1)', zIndex: 100, maxHeight: '300px', overflowY: 'auto' }}>
+                                                            {/* Opção Todos */}
                                                             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 'bold', color: '#0d47a1', padding: '10px 15px', borderBottom: '1px solid #eee' }} onClick={(e) => e.stopPropagation()}>
                                                                 <input type="checkbox" checked={!!selectedCommentaries['Todos']} onChange={() => handleCommentaryCheck('Todos')} />
                                                                 Todos
                                                             </label>
-                                                            {authors.map(author => (
-                                                                <label key={author} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: '#333', padding: '10px 15px', borderBottom: '1px solid #eee' }} onClick={(e) => e.stopPropagation()}>
-                                                                    <input type="checkbox" checked={!!selectedCommentaries[author]} onChange={() => handleCommentaryCheck(author)} />
-                                                                    {author}
+                                                            {/* Opção Todos Pt */}
+                                                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 'bold', color: '#333', padding: '10px 15px', borderBottom: '1px solid #eee' }} onClick={(e) => e.stopPropagation()}>
+                                                                <input type="checkbox" checked={!!selectedCommentaries['Todos Pt']} onChange={() => handleCommentaryCheck('Todos Pt')} />
+                                                                <span>Todos <strong style={{ color: '#2e7d32' }}>Pt</strong></span>
+                                                            </label>
+                                                            {/* Opção Todos En */}
+                                                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 'bold', color: '#333', padding: '10px 15px', borderBottom: '1px solid #eee' }} onClick={(e) => e.stopPropagation()}>
+                                                                <input type="checkbox" checked={!!selectedCommentaries['Todos En']} onChange={() => handleCommentaryCheck('Todos En')} />
+                                                                <span>Todos <strong style={{ color: '#d32f2f' }}>En</strong></span>
+                                                            </label>
+                                                            {/* Lista de Comentários */}
+                                                            {authorRefs.map(ref => (
+                                                                <label key={ref.key} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: '#333', padding: '10px 15px', borderBottom: '1px solid #eee' }} onClick={(e) => e.stopPropagation()}>
+                                                                    <input type="checkbox" checked={!!selectedCommentaries[ref.key]} onChange={() => handleCommentaryCheck(ref.key)} />
+                                                                    <span>
+                                                                        {ref.author} <strong style={{ color: ref.lang === 'pt' ? '#2e7d32' : '#d32f2f' }}>{ref.lang === 'pt' ? 'Pt' : 'En'}</strong>
+                                                                    </span>
                                                                 </label>
                                                             ))}
                                                         </div>
@@ -4186,7 +4430,9 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
                                                         <div key={c.id || Math.random()} style={{ marginBottom: '1rem', padding: '15px', backgroundColor: '#fff', border: '1px solid #e0e0e0', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', borderBottom: '1px solid #eee', paddingBottom: '8px' }}>
                                                                 <span style={{ fontSize: '1.2rem' }}>👤</span>
-                                                                <strong style={{ color: '#0d47a1', fontSize: '1.05rem' }}>{c.author}</strong>
+                                                                <strong style={{ color: '#0d47a1', fontSize: '1.05rem' }}>
+                                                                    {c.author} <strong style={{ color: c.lang === 'pt' ? '#2e7d32' : '#d32f2f' }}>{c.lang === 'pt' ? 'Pt' : 'En'}</strong>
+                                                                </strong>
                                                                 {c.verse && Number(c.verse) > 0 ? (
                                                                     <span style={{ backgroundColor: '#e3f2fd', color: '#1565c0', padding: '2px 6px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold' }}>v. {c.verse}</span>
                                                                 ) : (
@@ -4923,6 +5169,8 @@ const App = () => {
     const [provider, setProvider] = useState(() => localStorage.getItem('ai_provider') || 'gemini');
     const [ollamaModel, setOllamaModel] = useState(() => localStorage.getItem('ollama_model') || 'qwen2.5:14b');
     const [ollamaUrl, setOllamaUrl] = useState(() => localStorage.getItem('ollama_url') || 'http://localhost:11434');
+    const [deepseekApiKey, setDeepseekApiKey] = useState(() => localStorage.getItem('deepseek_api_key') || '');
+    const [deepseekModel, setDeepseekModel] = useState(() => localStorage.getItem('deepseek_model') || 'deepseek-chat');
     const [showSettings, setShowSettings] = useState(false);
     const [geminiKeyIndex, setGeminiKeyIndex] = useState(getActiveGeminiKeyIndex);
     const [exhaustedKeys, setExhaustedKeys] = useState(getExhaustedKeys);
@@ -4954,6 +5202,16 @@ const App = () => {
     const handleUrlChange = (val) => {
         setOllamaUrl(val);
         localStorage.setItem('ollama_url', val);
+    };
+
+    const handleDeepseekApiKeyChange = (val) => {
+        setDeepseekApiKey(val);
+        localStorage.setItem('deepseek_api_key', val);
+    };
+
+    const handleDeepseekModelChange = (val) => {
+        setDeepseekModel(val);
+        localStorage.setItem('deepseek_model', val);
     };
 
     const [rightSidebarMode, setRightSidebarMode] = useState<'normal' | 'collapsed-right' | 'expanded-left'>(() => {
@@ -5040,6 +5298,8 @@ const App = () => {
                                 <span>
                                     Gemini <span style={{ color: exhaustedKeys[geminiKeyIndex] ? '#d32f2f' : '#0d47a1', fontWeight: 'bold' }}>{geminiKeyIndex + 1}</span>
                                 </span>
+                            ) : provider === 'deepseek' ? (
+                                `DeepSeek (${deepseekModel})`
                             ) : provider === 'supabase' ? (
                                 'Supabase (Sem IA)'
                             ) : (
@@ -5075,11 +5335,25 @@ const App = () => {
                         </div>
                         <select value={provider} onChange={(e) => handleProviderChange(e.target.value)} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #90caf9', fontSize: '0.9rem', backgroundColor: 'white', cursor: 'pointer' }}>
                             <option value="gemini">Gemini (Nuvem)</option>
+                            <option value="deepseek">DeepSeek (Nuvem)</option>
                             <option value="ollama">Ollama (Local)</option>
                             <option value="supabase">Supabase (Sem IA)</option>
                         </select>
                     </div>
                     {provider === 'gemini' && <GeminiKeySelector />}
+                    {provider === 'deepseek' && (
+                        <>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', flexGrow: 1, minWidth: '220px' }}>
+                                <label style={{ fontWeight: 'bold', fontSize: '0.8rem', color: '#0d47a1' }}>CHAVE DE API DEEPSEEK:</label>
+                                <input type="password" value={deepseekApiKey} onChange={(e) => handleDeepseekApiKeyChange(e.target.value)} placeholder="sk-..." autoComplete="new-password" style={{ padding: '8px', borderRadius: '4px', border: '1px solid #90caf9', fontSize: '0.9rem', backgroundColor: 'white' }} />
+                                <small>A chave fica salva neste navegador. Não a use em um site público.</small>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', minWidth: '180px' }}>
+                                <label style={{ fontWeight: 'bold', fontSize: '0.8rem', color: '#0d47a1' }}>MODELO DEEPSEEK:</label>
+                                <input type="text" value={deepseekModel} onChange={(e) => handleDeepseekModelChange(e.target.value)} placeholder="deepseek-chat" style={{ padding: '8px', borderRadius: '4px', border: '1px solid #90caf9', fontSize: '0.9rem', backgroundColor: 'white' }} />
+                            </div>
+                        </>
+                    )}
                     {provider === 'ollama' && (
                         <>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', flexGrow: 1, minWidth: '180px' }}>

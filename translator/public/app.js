@@ -107,16 +107,18 @@ startBtn.addEventListener('click', async () => {
         let item = currentData[i];
         if (item.translated) continue; // Pula os já traduzidos
         
+        const originalText = item.textOriginal || item.text;
         currentRef.textContent = `Original (${item.book} ${item.chapter}:${item.verse})`;
-        enText.value = item.text;
+        enText.value = originalText;
         ptText.value = "Traduzindo...";
         statusText.textContent = `Traduzindo ID ${item.id}... (${i + 1}/${currentData.length})`;
         
         try {
-            const translatedStr = await translateText(item.text);
+            const translatedStr = await translateText(originalText);
             ptText.value = translatedStr;
             
-            // Atualiza item e salva no backend
+            // Atualiza item e salva no backend (mantendo original intacto)
+            item.textOriginal = originalText;
             item.text = translatedStr;
             item.translated = true;
             await saveTranslation(i, item);

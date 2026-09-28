@@ -37,3 +37,6 @@ traducoes/Abrir_Tradutor.bat
 *.njsproj
 *.sln
 *.sw?
+
+# Google Drive upload temp
+.tmp.driveupload/

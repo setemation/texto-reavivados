@@ -3,7 +3,9 @@ import fs from 'fs';
 import path from 'path';
 
 const PORT = 3001;
-const TRADUCOES_DIR = path.resolve(process.cwd(), 'traducoes');
+const DADOS_DIR = path.resolve(process.cwd(), 'Dados');
+const EN_DIR = path.resolve(DADOS_DIR, 'Obras-En');
+const PT_DIR = path.resolve(DADOS_DIR, 'Obras-Pt');
 const PUBLIC_DIR = path.resolve(process.cwd(), 'translator/public');
 
 const server = http.createServer(async (req, res) => {
@@ -42,10 +44,10 @@ const server = http.createServer(async (req, res) => {
     // API: List files
     if (req.method === 'GET' && req.url === '/api/files') {
         try {
-            if (!fs.existsSync(TRADUCOES_DIR)) {
-                fs.mkdirSync(TRADUCOES_DIR, { recursive: true });
+            if (!fs.existsSync(EN_DIR)) {
+                fs.mkdirSync(EN_DIR, { recursive: true });
             }
-            const files = fs.readdirSync(TRADUCOES_DIR).filter(f => f.endsWith('.json'));
+            const files = fs.readdirSync(EN_DIR).filter(f => f.endsWith('.json'));
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify(files));
         } catch (e) {
@@ -58,10 +60,42 @@ const server = http.createServer(async (req, res) => {
     // API: Load file
     if (req.method === 'GET' && req.url.startsWith('/api/file/')) {
         const fileName = decodeURIComponent(req.url.replace('/api/file/', ''));
-        const filePath = path.join(TRADUCOES_DIR, fileName);
+        const filePath = path.join(EN_DIR, fileName);
         if (fs.existsSync(filePath)) {
+            let data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+
+            // Se for arquivo em inglês, verifica se já existe arquivo em português com traduções salvas
+            const ptFileName = fileName.endsWith('_en.json') 
+                ? fileName.replace(/_en\.json$/, '_pt.json') 
+                : fileName.replace(/\.json$/, '_pt.json');
+            const ptFilePath = path.join(PT_DIR, ptFileName);
+            if (fs.existsSync(ptFilePath)) {
+                try {
+                    const ptData = JSON.parse(fs.readFileSync(ptFilePath, 'utf8'));
+                    const ptMap = new Map();
+                    ptData.forEach(d => {
+                        if (d && d.id !== undefined && d.translated) {
+                            ptMap.set(d.id, d.text);
+                            }
+                        });
+                        data = data.map(item => {
+                            if (ptMap.has(item.id)) {
+                                return {
+                                    ...item,
+                                    textOriginal: item.text,
+                                    translatedText: ptMap.get(item.id),
+                                    translated: true
+                                };
+                            }
+                            return item;
+                        });
+                    } catch (e) {
+                        console.error('Erro ao ler cache pt:', e.message);
+                    }
+            }
+
             res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(fs.readFileSync(filePath, 'utf8'));
+            res.end(JSON.stringify(data));
         } else {
             res.writeHead(404);
             res.end(JSON.stringify({ error: 'File not found' }));
@@ -69,30 +103,81 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
-    // API: Save item
+    // API: Save item - Mantém o arquivo em inglês intacto e adiciona/atualiza no arquivo em português
     if (req.method === 'POST' && req.url === '/api/save') {
         let body = '';
         req.on('data', chunk => body += chunk);
         req.on('end', () => {
             try {
                 const { fileName, item, index } = JSON.parse(body);
-                const filePath = path.join(TRADUCOES_DIR, fileName);
-                
-                if (fs.existsSync(filePath)) {
-                    const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-                    if (data[index] && data[index].id === item.id) {
-                        data[index] = item; // Update translated item
-                        fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-                        res.writeHead(200, { 'Content-Type': 'application/json' });
-                        res.end(JSON.stringify({ success: true }));
-                    } else {
-                        res.writeHead(400);
-                        res.end(JSON.stringify({ error: 'Index mismatch' }));
+
+                // Determinar o nome do arquivo em português
+                let ptFileName = fileName;
+                if (fileName.endsWith('_en.json')) {
+                    ptFileName = fileName.replace(/_en\.json$/, '_pt.json');
+                } else if (!fileName.includes('_pt')) {
+                    ptFileName = fileName.replace(/\.json$/, '_pt.json');
+                }
+
+                const ptFilePath = path.join(PT_DIR, ptFileName);
+                let ptData = [];
+
+                if (fs.existsSync(ptFilePath)) {
+                    try {
+                        ptData = JSON.parse(fs.readFileSync(ptFilePath, 'utf8'));
+                    } catch (e) {
+                        ptData = [];
                     }
                 } else {
-                    res.writeHead(404);
-                    res.end(JSON.stringify({ error: 'File not found' }));
+                    // Inicializa a partir do arquivo original se existir, para manter IDs e referências
+                    const originalPath = path.join(EN_DIR, fileName);
+                    if (fs.existsSync(originalPath)) {
+                        try {
+                            const origData = JSON.parse(fs.readFileSync(originalPath, 'utf8'));
+                            ptData = origData.map(d => ({
+                                id: d.id,
+                                book: d.book,
+                                chapter: d.chapter,
+                                verse: d.verse,
+                                textOriginal: d.text,
+                                text: '',
+                                translated: false
+                            }));
+                        } catch (e) {
+                            ptData = [];
+                        }
+                    }
                 }
+
+                const translatedEntry = {
+                    id: item.id,
+                    book: item.book,
+                    chapter: item.chapter,
+                    verse: item.verse,
+                    text: item.text, // Texto traduzido para português
+                    textOriginal: item.textOriginal || item.originalText || '',
+                    translated: true
+                };
+
+                const existingIdx = ptData.findIndex(d => d.id === item.id);
+                if (existingIdx !== -1) {
+                    ptData[existingIdx] = translatedEntry;
+                } else if (ptData[index] && ptData[index].id === item.id) {
+                    ptData[index] = translatedEntry;
+                } else {
+                    ptData.push(translatedEntry);
+                }
+
+                fs.writeFileSync(ptFilePath, JSON.stringify(ptData, null, 2), 'utf8');
+
+                // Também sincroniza com public/traducoes se o diretório existir
+                const publicPtDir = path.resolve(process.cwd(), 'public', 'traducoes');
+                if (fs.existsSync(publicPtDir)) {
+                    fs.writeFileSync(path.join(publicPtDir, ptFileName), JSON.stringify(ptData, null, 2), 'utf8');
+                }
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, ptFileName }));
             } catch (e) {
                 res.writeHead(500);
                 res.end(JSON.stringify({ error: e.message }));
