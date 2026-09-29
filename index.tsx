@@ -872,6 +872,17 @@ const getBookVariants = (rawBook: string): string[] => {
     return Array.from(variants);
 };
 
+// O rótulo de cada obra na UI é "<autor> Pt" ou "<autor> En". Autores que já vêm
+// com o sufixo gravado (ex.: "Clarke Pt" vindo do Supabase) não devem recebê-lo de novo.
+const authorKeyFor = (author: string, lang: 'pt' | 'en'): string => {
+    const name = (author || '').trim();
+    if (/\s(Pt|En)$/.test(name)) return name;
+    return `${name} ${lang === 'pt' ? 'Pt' : 'En'}`;
+};
+
+const baseAuthorName = (author: string): string =>
+    (author || '').replace(/\s(Pt|En)$/i, '').trim().toLowerCase();
+
 const fetchCommentaries = async (refStr: string): Promise<any[]> => {
     try {
         const match = refStr.trim().match(/^(.+?)\s+(\d+):?(.*)$/);
@@ -888,6 +899,7 @@ const fetchCommentaries = async (refStr: string): Promise<any[]> => {
                 .in('book', bookVariants)
                 .eq('chapter', chapter)
                 .neq('author', 'Resumo dos Capítulos')
+                .neq('author', 'Bíblia Sumarizada Pt')
                 .order('id', { ascending: true });
                 
             if (error) {
@@ -918,7 +930,7 @@ const fetchCommentaries = async (refStr: string): Promise<any[]> => {
             return {
                 ...c,
                 lang,
-                authorKey: `${c.author} ${isPt ? 'Pt' : 'En'}`
+                authorKey: authorKeyFor(c.author, lang)
             };
         });
 
@@ -928,7 +940,7 @@ const fetchCommentaries = async (refStr: string): Promise<any[]> => {
             return {
                 ...c,
                 lang,
-                authorKey: c.authorKey || `${c.author} ${isPt ? 'Pt' : 'En'}`
+                authorKey: authorKeyFor(c.authorKey || c.author, lang)
             };
         });
 
@@ -936,7 +948,9 @@ const fetchCommentaries = async (refStr: string): Promise<any[]> => {
         const seen = new Set<string>();
         const combined: any[] = [];
         for (const c of [...processedLocalList, ...processedDbList]) {
-            const uniqueKey = `${(c.author || '').toLowerCase()}|${c.chapter}|${c.verse ?? 0}|${(c.text || '').substring(0, 30)}`;
+            // O sufixo de idioma é ignorado aqui para que a mesma obra vinda do arquivo local
+            // (autor sem sufixo) e do Supabase (autor já com " Pt") não apareça duplicada.
+            const uniqueKey = `${baseAuthorName(c.author)}|${c.chapter}|${c.verse ?? 0}|${(c.text || '').substring(0, 30)}`;
             if (!seen.has(uniqueKey)) {
                 seen.add(uniqueKey);
                 combined.push(c);
@@ -1003,7 +1017,29 @@ const fetchBibliaSumarizada = async (refStr: string): Promise<string | null> => 
     if (!match) return null;
     const rawBook = match[1].trim();
     const chapter = parseInt(match[2], 10);
-    const params = getBookVariants(rawBook)
+    const bookVariants = getBookVariants(rawBook);
+
+    // Em produção (Vercel) não existe o middleware local: o sumário vem do Supabase.
+    if (isSupabaseConfigured()) {
+        try {
+            const { data, error } = await supabase
+                .from('commentaries')
+                .select('text')
+                .eq('author', 'Bíblia Sumarizada Pt')
+                .in('book', bookVariants)
+                .eq('chapter', chapter)
+                .order('id', { ascending: true })
+                .limit(1);
+
+            if (!error && data && data.length > 0 && data[0].text) {
+                return data[0].text;
+            }
+        } catch (e) {
+            // Segue para o fallback local
+        }
+    }
+
+    const params = bookVariants
         .map((v) => 'book=' + encodeURIComponent(v))
         .join('&');
 

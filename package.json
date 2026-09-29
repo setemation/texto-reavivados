@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "lint": "tsc --noEmit",
     "seed:supabase": "node scripts/seed_supabase.mjs",
+    "sync:pt": "node --max-old-space-size=4096 scripts/sync_pt_supabase.mjs",
     "tradutor": "node translator/server.mjs",
     "traduzir:clarke": "node scripts/translate_clarke_full.mjs"
   },
