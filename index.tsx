@@ -883,6 +883,11 @@ const authorKeyFor = (author: string, lang: 'pt' | 'en'): string => {
 const baseAuthorName = (author: string): string =>
     (author || '').replace(/\s(Pt|En)$/i, '').trim().toLowerCase();
 
+// O badge de idioma (Pt/En) já é exibido ao lado do nome, então o sufixo gravado
+// no autor (ex.: "Cambridge Pt" vindo do Supabase) é removido para não duplicar.
+const displayAuthor = (author: string): string =>
+    (author || '').replace(/\s(Pt|En)$/, '');
+
 const fetchCommentaries = async (refStr: string): Promise<any[]> => {
     try {
         const match = refStr.trim().match(/^(.+?)\s+(\d+):?(.*)$/);
@@ -4122,7 +4127,7 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
             if (!map.has(key)) {
                 map.set(key, {
                     key,
-                    author: c.author,
+                    author: displayAuthor(c.author),
                     lang
                 });
             }
@@ -4467,7 +4472,7 @@ F) Análise Teológica - Como se encaixa no plano geral da Bíblia e conexões d
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', borderBottom: '1px solid #eee', paddingBottom: '8px' }}>
                                                                 <span style={{ fontSize: '1.2rem' }}>👤</span>
                                                                 <strong style={{ color: '#0d47a1', fontSize: '1.05rem' }}>
-                                                                    {c.author} <strong style={{ color: c.lang === 'pt' ? '#2e7d32' : '#d32f2f' }}>{c.lang === 'pt' ? 'Pt' : 'En'}</strong>
+                                                                    {displayAuthor(c.author)} <strong style={{ color: c.lang === 'pt' ? '#2e7d32' : '#d32f2f' }}>{c.lang === 'pt' ? 'Pt' : 'En'}</strong>
                                                                 </strong>
                                                                 {c.verse && Number(c.verse) > 0 ? (
                                                                     <span style={{ backgroundColor: '#e3f2fd', color: '#1565c0', padding: '2px 6px', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 'bold' }}>v. {c.verse}</span>
